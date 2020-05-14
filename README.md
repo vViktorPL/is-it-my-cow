@@ -1,5 +1,7 @@
 # is-it-my-cow
 
+![Cow head](assets/cowhead.svg)
+
 This is game for [Elm Game Jam #4 — Animals/Nature](https://itch.io/jam/elm-game-jam-4) contest.
 
 The rules are simple, on each level you've got presented cow that belongs to you
