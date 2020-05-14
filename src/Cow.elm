@@ -89,7 +89,7 @@ view (Cow patches) =
     let
         cowHead =
             Svg.image
-                [ Svg.Attributes.xlinkHref "/assets/cowhead.svg"
+                [ Svg.Attributes.xlinkHref "cowhead.svg"
                 , Svg.Attributes.width "120"
                 , Svg.Attributes.height "120"
                 ]
