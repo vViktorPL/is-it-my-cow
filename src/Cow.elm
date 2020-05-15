@@ -1,4 +1,4 @@
-module Cow exposing (Cow, random, view)
+module Cow exposing (Cow, cowHeight, cowWidth, random, view)
 
 import Html exposing (Html)
 import Random
@@ -84,7 +84,7 @@ random =
         |> Random.map Cow
 
 
-view : Cow -> Html msg
+view : Cow -> Svg msg
 view (Cow patches) =
     let
         cowHead =
@@ -136,9 +136,11 @@ view (Cow patches) =
                             [ SvgBlob.view blob ]
                     )
     in
-    svg
-        [ width (String.fromFloat cowWidth)
-        , height (String.fromFloat cowHeight)
-        , viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)
-        ]
+    --    svg
+    --        [ width (String.fromFloat cowWidth)
+    --        , height (String.fromFloat cowHeight)
+    --        , viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)
+    --        ]
+    Svg.g
+        []
         [ cowBodyClipPath, cowBody, cowHead ]

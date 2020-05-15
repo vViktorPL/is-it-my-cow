@@ -2,19 +2,25 @@ module Main exposing (..)
 
 import Browser
 import Cow exposing (Cow)
-import Html
+import Game
+import Html exposing (Html)
+import Html.Attributes exposing (src, style)
+import Html.Events exposing (onClick)
 import Platform.Sub
 import Random
 import Svg exposing (svg)
 import Svg.Attributes exposing (height, viewBox, width)
 
 
-type alias Model =
-    Maybe Cow
+type Model
+    = Menu
+    | Game Game.Model
 
 
 type Msg
-    = GeneratedCow Cow
+    = StartGame
+    | GameInitialized Game.Model
+    | GameMsg Game.Msg
 
 
 main =
@@ -28,20 +34,41 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init flags =
-    ( Nothing, Random.generate GeneratedCow Cow.random )
+    ( Menu, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        GeneratedCow cow ->
-            ( Just cow, Cmd.none )
+    case ( msg, model ) of
+        ( StartGame, _ ) ->
+            ( model, Game.startGame GameInitialized )
+
+        ( GameInitialized game, _ ) ->
+            ( Game game, Cmd.none )
+
+        ( GameMsg gameMsg, Game game ) ->
+            case Game.update gameMsg game of
+                ( Just newGameModel, cmd ) ->
+                    ( Game newGameModel, Cmd.map GameMsg cmd )
+
+                _ ->
+                    ( Menu, Cmd.none )
+
+        ( GameMsg _, Menu ) ->
+            ( Menu, Cmd.none )
 
 
+view : Model -> Html Msg
 view model =
     case model of
-        Nothing ->
-            Html.text "..."
+        Menu ->
+            Html.div [ style "text-align" "center" ]
+                [ Html.h1 [] [ Html.text "Is it my cow?" ]
+                , Html.img [ src "cowhead.svg" ] []
+                , Html.br [] []
+                , Html.br [] []
+                , Html.button [ onClick StartGame ] [ Html.text "Start" ]
+                ]
 
-        Just cow ->
-            Cow.view cow
+        Game game ->
+            Html.map GameMsg <| Game.view game
