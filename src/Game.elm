@@ -185,14 +185,16 @@ view (Game { lives, score, level, screen }) =
         FindMyCow ->
             Html.div
                 []
-                [ Html.h2 [] [ Html.text "Which one is your cow?" ]
-                , viewStatusBar lives score
-                , viewCows level
+                [ viewCows level
+                , Html.div [ style "position" "absolute", style "top" "20px", style "left" "20px" ]
+                    [ Html.h2 [] [ Html.text "Which one is your cow?" ]
+                    , viewStatusBar lives score
+                    ]
                 ]
 
         Success ->
             Html.div []
-                [ Html.text "You've found it!"
+                [ Html.text "You've found it! 🎉"
                 , Html.button [ onClick GenerateNextLevel ] [ Html.text "Next level" ]
                 ]
 
