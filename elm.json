@@ -11,6 +11,8 @@
             "elm/html": "1.0.0",
             "elm/random": "1.0.0",
             "elm/svg": "1.0.1",
+            "elm-community/list-extra": "8.2.4",
+            "elm-community/random-extra": "3.1.0",
             "folkertdev/one-true-path-experiment": "5.0.0"
         },
         "indirect": {
@@ -19,7 +21,6 @@
             "elm/time": "1.0.0",
             "elm/url": "1.0.0",
             "elm/virtual-dom": "1.0.2",
-            "elm-community/list-extra": "8.2.4",
             "folkertdev/elm-deque": "3.0.1",
             "folkertdev/svg-path-lowlevel": "3.0.0",
             "ianmackenzie/elm-1d-parameter": "1.0.1",
@@ -28,11 +29,14 @@
             "ianmackenzie/elm-interval": "2.0.0",
             "ianmackenzie/elm-triangular-mesh": "1.0.4",
             "ianmackenzie/elm-units": "2.5.0",
-            "ianmackenzie/elm-units-interval": "1.1.0"
+            "ianmackenzie/elm-units-interval": "1.1.0",
+            "owanturist/elm-union-find": "1.0.0"
         }
     },
     "test-dependencies": {
-        "direct": {},
+        "direct": {
+            "elm-explorations/test": "1.2.2"
+        },
         "indirect": {}
     }
 }
