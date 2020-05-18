@@ -1,4 +1,4 @@
-module Cow exposing (Cow, cowHeight, cowWidth, random, view)
+module Cow exposing (Cow, cowHeight, cowWidth, goLeft, random, view)
 
 import Html exposing (Html)
 import Random
@@ -11,8 +11,14 @@ type alias CowPatch =
     ( SvgBlob, ( Float, Float ) )
 
 
+type CowState
+    = Standing
+    | GoingLeft
+    | GoingRight
+
+
 type Cow
-    = Cow (List CowPatch)
+    = Cow CowState (List CowPatch)
 
 
 minPatches =
@@ -81,11 +87,73 @@ random : Random.Generator Cow
 random =
     Random.int minPatches maxPatches
         |> Random.andThen (\patchesCount -> Random.list patchesCount randomPatch)
-        |> Random.map Cow
+        |> Random.map (Cow Standing)
+
+
+cowStepSize =
+    cowBodyRY * 0.2
+
+
+type LegAnimation
+    = Stand
+    | GoLeft Float
+    | GoRight Float
+
+
+viewLeg : ( Float, Float ) -> LegAnimation -> Svg msg
+viewLeg ( x, y ) animation =
+    let
+        cy =
+            y + cowBodyRY * 0.7
+    in
+    Svg.g []
+        [ Svg.ellipse
+            [ Svg.Attributes.ry <| String.fromFloat (cowBodyRY * 0.8)
+            , Svg.Attributes.rx <| String.fromFloat (cowBodyRY * 0.15)
+            , Svg.Attributes.cx <| String.fromFloat x
+            , Svg.Attributes.cy <| String.fromFloat cy
+            , Svg.Attributes.style "fill: white; stroke: black"
+            ]
+            (case animation of
+                GoLeft delay ->
+                    [ Svg.animateMotion
+                        [ Svg.Attributes.path <|
+                            pathCmds
+                                [ ( 'M', [ ( 0, 0 ) ] )
+                                , ( 'C', [ ( 0, 0 ), ( -cowStepSize, -cowStepSize ), ( -cowStepSize, 0 ) ] )
+                                , ( 'L', [ ( 0, 0 ) ] )
+                                ]
+                        , Svg.Attributes.dur "1s"
+                        , Svg.Attributes.repeatCount "indefinite"
+                        , Svg.Attributes.begin (String.fromFloat delay ++ "s")
+                        ]
+                        []
+                    ]
+
+                _ ->
+                    []
+            )
+        ]
+
+
+pathCmds : List ( Char, List ( Float, Float ) ) -> String
+pathCmds cmds =
+    cmds
+        |> List.map (\( cmd, points ) -> pathCmd cmd points)
+        |> String.join " "
+
+
+pathCmd : Char -> List ( Float, Float ) -> String
+pathCmd cmd points =
+    String.fromChar cmd
+        ++ (points
+                |> List.map (\( x, y ) -> String.fromFloat x ++ "," ++ String.fromFloat y)
+                |> String.join " "
+           )
 
 
 view : Cow -> Svg msg
-view (Cow patches) =
+view (Cow state patches) =
     let
         cowHead =
             Svg.image
@@ -135,6 +203,28 @@ view (Cow patches) =
                             ]
                             [ SvgBlob.view blob ]
                     )
+
+        rightLegAnim =
+            case state of
+                Standing ->
+                    Stand
+
+                GoingLeft ->
+                    GoLeft 0.5
+
+                GoingRight ->
+                    GoRight 0.5
+
+        leftLegAnim =
+            case state of
+                Standing ->
+                    Stand
+
+                GoingLeft ->
+                    GoLeft 0
+
+                GoingRight ->
+                    GoRight 0
     in
     --    svg
     --        [ width (String.fromFloat cowWidth)
@@ -143,4 +233,16 @@ view (Cow patches) =
     --        ]
     Svg.g
         []
-        [ cowBodyClipPath, cowBody, cowHead ]
+        [ cowBodyClipPath
+        , viewLeg ( cowBodyCX - cowBodyRX * 0.8, cowBodyCY * 0.9 ) rightLegAnim
+        , viewLeg ( cowBodyCX + cowBodyRX * 0.6, cowBodyCY * 0.9 ) rightLegAnim
+        , cowBody
+        , viewLeg ( cowBodyCX - cowBodyRX * 0.6, cowBodyCY ) leftLegAnim
+        , viewLeg ( cowBodyCX + cowBodyRX * 0.8, cowBodyCY ) leftLegAnim
+        , cowHead
+        ]
+
+
+goLeft : Cow -> Cow
+goLeft (Cow _ patches) =
+    Cow GoingLeft patches

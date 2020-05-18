@@ -44,6 +44,7 @@ type Msg
     = Ready
     | Found
     | Missed
+    | AnimateMyCow
     | GenerateNextLevel
     | NextLevel Level
     | TryAgain
@@ -74,6 +75,11 @@ cowsPerLevel =
     5
 
 
+animateMyCowInLevel : Level -> Level
+animateMyCowInLevel (Level ( myCowPos, myCow ) restCows) =
+    Level ( myCowPos, Cow.goLeft myCow ) restCows
+
+
 update : Msg -> Model -> ( Maybe Model, Cmd Msg )
 update msg (Game state) =
     case msg of
@@ -89,6 +95,9 @@ update msg (Game state) =
 
             else
                 ( Just <| Game { state | screen = Failure, lives = state.lives - 1 }, Cmd.none )
+
+        AnimateMyCow ->
+            ( Just <| Game { state | level = animateMyCowInLevel state.level }, Cmd.none )
 
         GenerateNextLevel ->
             ( Just <| Game state, Random.generate NextLevel randomLevel )
@@ -257,7 +266,8 @@ viewCows (Level myCow restCows) =
                                 , style "transform" ("scale(" ++ String.fromFloat levelCowSizeRatio ++ ")")
                                 , onClick
                                     (if cow == Tuple.second myCow then
-                                        Found
+                                        AnimateMyCow
+                                        --Found
 
                                      else
                                         Missed
