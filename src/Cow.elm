@@ -1,9 +1,10 @@
-module Cow exposing (Cow, cowHeight, cowWidth, random, view)
+module Cow exposing (Cow, cowHeight, cowWidth, moveTo, random, setSize, view)
 
 import Html exposing (Html)
 import Random
 import Svg exposing (Svg, svg)
-import Svg.Attributes exposing (height, viewBox, width)
+import Svg.Attributes exposing (height, style, viewBox, width)
+import Svg.Events exposing (onClick)
 import SvgBlob exposing (SvgBlob)
 
 
@@ -12,7 +13,17 @@ type alias CowPatch =
 
 
 type Cow
-    = Cow (List CowPatch)
+    = Cow
+        { patches : List CowPatch
+        , position : ( Float, Float )
+        , size : ( Float, Float )
+        , action : CowAction
+        }
+
+
+type CowAction
+    = Stand
+    | Walk ( Float, Float )
 
 
 minPatches =
@@ -77,16 +88,40 @@ randomPatch =
         |> Random.andThen (\randomBlob -> Random.pair randomBlob randomPosition)
 
 
-random : Random.Generator Cow
-random =
+random : ( Float, Float ) -> Random.Generator Cow
+random size =
     Random.int minPatches maxPatches
         |> Random.andThen (\patchesCount -> Random.list patchesCount randomPatch)
-        |> Random.map Cow
+        |> Random.map
+            (\patches ->
+                Cow
+                    { patches = patches
+                    , position = ( 0, 0 )
+                    , size = size
+                    , action = Stand
+                    }
+            )
 
 
-view : Cow -> Svg msg
-view (Cow patches) =
+moveTo : ( Float, Float ) -> Cow -> Cow
+moveTo position (Cow data) =
+    Cow { data | position = position }
+
+
+setSize : ( Float, Float ) -> Cow -> Cow
+setSize size (Cow data) =
+    Cow { data | size = size }
+
+
+view : msg -> Cow -> Svg msg
+view onClickMsg (Cow { patches, position, size, action }) =
     let
+        ( x, y ) =
+            position
+
+        ( width, height ) =
+            size
+
         cowHead =
             Svg.image
                 [ Svg.Attributes.xlinkHref "cowhead.svg"
@@ -128,9 +163,9 @@ view (Cow patches) =
         patchInstances =
             patches
                 |> List.map
-                    (\( blob, ( x, y ) ) ->
+                    (\( blob, ( patchX, patchY ) ) ->
                         Svg.g
-                            [ Svg.Attributes.transform ("translate(" ++ String.fromFloat x ++ " " ++ String.fromFloat y ++ ")")
+                            [ Svg.Attributes.transform <| "translate(" ++ String.fromFloat patchX ++ " " ++ String.fromFloat patchY ++ ")"
                             , Svg.Attributes.fill "black"
                             ]
                             [ SvgBlob.view blob ]
@@ -141,6 +176,13 @@ view (Cow patches) =
     --        , height (String.fromFloat cowHeight)
     --        , viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)
     --        ]
-    Svg.g
-        []
+    svg
+        [ Svg.Attributes.x <| String.fromFloat x
+        , Svg.Attributes.y <| String.fromFloat y
+        , Svg.Attributes.width <| String.fromFloat width
+        , Svg.Attributes.height <| String.fromFloat height
+        , Svg.Attributes.viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)
+        , style "cursor: pointer"
+        , onClick onClickMsg
+        ]
         [ cowBodyClipPath, cowBody, cowHead ]

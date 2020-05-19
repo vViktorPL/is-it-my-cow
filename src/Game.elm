@@ -6,21 +6,15 @@ import Html exposing (Html)
 import Html.Attributes exposing (style)
 import Html.Events exposing (onClick)
 import List.Extra
+import List.Nonempty exposing (Nonempty)
 import Random
+import Random.Nonempty
 import Svg exposing (svg)
 import Svg.Attributes exposing (height, preserveAspectRatio, viewBox, width, xlinkHref)
 
 
-type alias Position =
-    ( Float, Float )
-
-
-type alias CowWithPosition =
-    ( Position, Cow )
-
-
 type Level
-    = Level CowWithPosition (List CowWithPosition)
+    = Level (Nonempty Cow)
 
 
 type GameScreen
@@ -125,7 +119,7 @@ randomLevel =
             cowPositionSlots
                 |> Grid.pickRandom2DGridCells cowsPerLevel
                 |> Random.map
-                    (List.map
+                    (List.Nonempty.map
                         (\( slotX, slotY ) ->
                             ( toFloat slotX * cellWidth + (screenWidth - meadowWidth)
                             , toFloat slotY * cellHeight + (screenHeight - meadowHeight)
@@ -134,19 +128,15 @@ randomLevel =
                     )
 
         randomCows =
-            Random.list cowsPerLevel Cow.random
+            Random.Nonempty.nonempty cowsPerLevel (Cow.random ( cellWidth, cellHeight ))
     in
     Random.pair randomCowPositions randomCows
-        |> Random.map (\( positions, cows ) -> List.Extra.zip positions cows)
-        |> Random.andThen
-            (\cows ->
-                case cows of
-                    myCow :: restCows ->
-                        Random.constant (Level myCow restCows)
-
-                    -- impossible path but we have to match the type anyway
-                    _ ->
-                        Random.map (\singleCow -> Level ( ( 0, 0 ), singleCow ) []) Cow.random
+        |> Random.map
+            (\( positions, cows ) ->
+                cows
+                    |> List.Nonempty.zip positions
+                    |> List.Nonempty.map (\( position, cow ) -> Cow.moveTo position cow)
+                    |> Level
             )
 
 
@@ -163,8 +153,8 @@ startGame tagger =
 
 
 getMyCow : Level -> Cow
-getMyCow (Level myCow _) =
-    Tuple.second myCow
+getMyCow (Level cows) =
+    List.Nonempty.head cows
 
 
 view : Model -> Html Msg
@@ -176,9 +166,9 @@ view (Game { lives, score, level, screen }) =
                 [ Html.h2 [] [ Html.text "This is your cow:" ]
                 , level
                     |> getMyCow
-                    |> Cow.view
-                    |> List.singleton
-                    |> svg [ width (String.fromFloat Cow.cowWidth), height (String.fromFloat Cow.cowHeight) ]
+                    |> Cow.moveTo ( 0, 0 )
+                    |> Cow.setSize ( Cow.cowWidth, Cow.cowHeight )
+                    |> Cow.view Ready
                 , Html.button [ onClick Ready ] [ Html.text "I'm ready!" ]
                 ]
 
@@ -221,49 +211,30 @@ viewStatusBar lives score =
 
 
 viewCows : Level -> Html Msg
-viewCows (Level myCow restCows) =
+viewCows (Level cows) =
+    let
+        meadow =
+            Svg.image
+                [ xlinkHref "meadow.svg"
+                , screenWidth |> String.fromInt |> width
+                , screenHeight |> String.fromInt |> height
+                ]
+                []
+
+        myCow =
+            cows
+                |> List.Nonempty.head
+                |> Cow.view Found
+
+        restCows =
+            cows
+                |> List.Nonempty.tail
+                |> List.map (Cow.view Missed)
+    in
     svg
         [ style "width" "100%"
         , style "height" "100%"
         , viewBox ([ 0, 0, screenWidth, screenHeight ] |> List.map String.fromInt |> String.join " ")
         , preserveAspectRatio "xMidYMin meet"
         ]
-        ([ Svg.defs []
-            ((myCow :: restCows)
-                |> List.map Tuple.second
-                |> List.indexedMap
-                    (\index cow ->
-                        cow
-                            |> Cow.view
-                            |> List.singleton
-                            |> Svg.g [ Svg.Attributes.id ("cow-" ++ String.fromInt index) ]
-                    )
-            )
-         , Svg.image
-            [ xlinkHref "meadow.svg"
-            , screenWidth |> String.fromInt |> width
-            , screenHeight |> String.fromInt |> height
-            ]
-            []
-         ]
-            ++ ((myCow :: restCows)
-                    |> List.indexedMap
-                        (\index ( ( x, y ), cow ) ->
-                            Svg.use
-                                [ Svg.Attributes.xlinkHref ("#cow-" ++ String.fromInt index)
-                                , Svg.Attributes.x (String.fromFloat (x / levelCowSizeRatio))
-                                , Svg.Attributes.y (String.fromFloat (y / levelCowSizeRatio))
-                                , style "cursor" "pointer"
-                                , style "transform" ("scale(" ++ String.fromFloat levelCowSizeRatio ++ ")")
-                                , onClick
-                                    (if cow == Tuple.second myCow then
-                                        Found
-
-                                     else
-                                        Missed
-                                    )
-                                ]
-                                []
-                        )
-               )
-        )
+        (meadow :: myCow :: restCows)
