@@ -202,4 +202,33 @@ view onClickMsg (Cow { patches, position, size, action }) =
         , style "cursor: pointer"
         , onClick onClickMsg
         ]
-        [ cowBodyClipPath, cowBody, cowHead ]
+        [ cowBodyClipPath
+        , viewLeg ( cowBodyCX - cowBodyRX * 0.8, cowBodyCY * 0.9 )
+        , viewLeg ( cowBodyCX + cowBodyRX * 0.6, cowBodyCY * 0.9 )
+        , cowBody
+        , viewLeg ( cowBodyCX - cowBodyRX * 0.6, cowBodyCY )
+        , viewLeg ( cowBodyCX + cowBodyRX * 0.8, cowBodyCY )
+        , cowHead
+        ]
+
+
+cowStepSize =
+    cowBodyRY * 0.2
+
+
+viewLeg : ( Float, Float ) -> Svg msg
+viewLeg ( x, y ) =
+    let
+        cy =
+            y + cowBodyRY * 0.7
+    in
+    Svg.g []
+        [ Svg.ellipse
+            [ Svg.Attributes.ry <| String.fromFloat (cowBodyRY * 0.8)
+            , Svg.Attributes.rx <| String.fromFloat (cowBodyRY * 0.15)
+            , Svg.Attributes.cx <| String.fromFloat x
+            , Svg.Attributes.cy <| String.fromFloat cy
+            , Svg.Attributes.style "fill: white; stroke: black"
+            ]
+            []
+        ]
