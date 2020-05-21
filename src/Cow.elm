@@ -116,7 +116,6 @@ teleportTo position (Cow data) =
 getPosition : Cow -> ( Float, Float )
 getPosition (Cow data) =
     Animator.current data.position
-        |> Debug.log "getPosition"
 
 
 isIdle : Cow -> Bool

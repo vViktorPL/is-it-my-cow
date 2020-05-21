@@ -124,7 +124,6 @@ cowPossibleMoves cow restCows =
     let
         occupiedSlots =
             List.map cowSlot restCows
-                |> Debug.log "occupiedSlots"
 
         ( sx, sy ) =
             cowSlot cow
@@ -143,7 +142,6 @@ cowPossibleMoves cow restCows =
         |> List.filter
             (\( x, y ) -> x >= 0 && x < maxSX && y >= 0 && y < maxSY && not (List.member ( x, y ) occupiedSlots))
         |> List.map slotCoordsToPosition
-        |> Debug.log "possibleMoves"
 
 
 update : Msg -> Model -> ( Maybe Model, Cmd Msg )
