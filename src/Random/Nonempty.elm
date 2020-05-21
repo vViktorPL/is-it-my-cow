@@ -1,4 +1,4 @@
-module Random.Nonempty exposing (nonempty, shuffle)
+module Random.Nonempty exposing (choose, nonempty, shuffle)
 
 import List.Nonempty exposing (Nonempty)
 import Random
@@ -26,4 +26,15 @@ shuffle l =
 
                     [] ->
                         List.Nonempty.Nonempty (List.Nonempty.head l) []
+            )
+
+
+choose : Nonempty a -> Random.Generator a
+choose l =
+    l
+        |> List.Nonempty.toList
+        |> Random.List.choose
+        |> Random.map
+            (\( maybeElement, _ ) ->
+                Maybe.withDefault (List.Nonempty.head l) maybeElement
             )

@@ -1,16 +1,19 @@
-module Game exposing (Model, Msg, startGame, update, view)
+module Game exposing (Model, Msg, startGame, subscription, update, view)
 
+import Animator
+import Browser.Events
 import Cow exposing (Cow)
 import Grid
 import Html exposing (Html)
 import Html.Attributes exposing (style)
 import Html.Events exposing (onClick)
-import List.Extra
 import List.Nonempty exposing (Nonempty)
 import Random
+import Random.List
 import Random.Nonempty
 import Svg exposing (svg)
 import Svg.Attributes exposing (height, preserveAspectRatio, viewBox, width, xlinkHref)
+import Time
 
 
 type Level
@@ -42,6 +45,10 @@ type Msg
     | NextLevel Level
     | TryAgain
     | ExitGame
+    | Tick Time.Posix
+    | DoSomeRandomAction
+    | AnimateCow Int ( Float, Float )
+    | Idle
 
 
 screenWidth =
@@ -60,6 +67,18 @@ meadowHeight =
     screenHeight - 220
 
 
+meadowTop =
+    screenHeight - meadowHeight
+
+
+cellWidth =
+    Cow.cowWidth * levelCowSizeRatio
+
+
+cellHeight =
+    Cow.cowHeight * levelCowSizeRatio
+
+
 levelCowSizeRatio =
     0.5
 
@@ -68,9 +87,73 @@ cowsPerLevel =
     5
 
 
+animate : Time.Posix -> Model -> Model
+animate newTime (Game ({ level } as state)) =
+    Game
+        { state
+            | level =
+                case level of
+                    Level cows ->
+                        cows
+                            |> List.Nonempty.map (Animator.update newTime Cow.animator)
+                            |> Level
+        }
+
+
+gameLevelMap : (Level -> Level) -> Model -> Model
+gameLevelMap f (Game state) =
+    Game { state | level = f state.level }
+
+
+cowSlot : Cow -> ( Int, Int )
+cowSlot cow =
+    let
+        ( x, y ) =
+            Cow.getPosition cow
+    in
+    ( floor (x / cellWidth), floor ((y - meadowTop) / cellHeight) )
+
+
+slotCoordsToPosition : ( Int, Int ) -> ( Float, Float )
+slotCoordsToPosition ( slotX, slotY ) =
+    ( toFloat slotX * cellWidth, toFloat slotY * cellHeight + meadowTop )
+
+
+cowPossibleMoves : Cow -> List Cow -> List ( Float, Float )
+cowPossibleMoves cow restCows =
+    let
+        occupiedSlots =
+            List.map cowSlot restCows
+                |> Debug.log "occupiedSlots"
+
+        ( sx, sy ) =
+            cowSlot cow
+
+        maxSX =
+            floor (screenWidth / cellWidth)
+
+        maxSY =
+            floor (meadowHeight / cellHeight)
+    in
+    [ ( sx - 1, sy )
+    , ( sx + 1, sy )
+    , ( sx, sy - 1 )
+    , ( sx, sy + 1 )
+    ]
+        |> List.filter
+            (\( x, y ) -> x >= 0 && x < maxSX && y >= 0 && y < maxSY && not (List.member ( x, y ) occupiedSlots))
+        |> List.map slotCoordsToPosition
+        |> Debug.log "possibleMoves"
+
+
 update : Msg -> Model -> ( Maybe Model, Cmd Msg )
-update msg (Game state) =
+update msg ((Game state) as model) =
     case msg of
+        Tick newTime ->
+            ( Just <| animate newTime model
+            , Cmd.none
+            )
+
         Ready ->
             ( Just <| Game { state | screen = FindMyCow }, Cmd.none )
 
@@ -93,6 +176,66 @@ update msg (Game state) =
         TryAgain ->
             ( Just <| Game { state | screen = MyCow }, Cmd.none )
 
+        DoSomeRandomAction ->
+            ( Just model
+            , case state.level of
+                Level cows ->
+                    Random.int 0 (List.Nonempty.length cows)
+                        |> Random.andThen
+                            (\cowIndex ->
+                                let
+                                    cow =
+                                        List.Nonempty.get cowIndex cows
+
+                                    restCows =
+                                        List.filter ((/=) cow) (List.Nonempty.toList cows)
+
+                                    possibleMoves =
+                                        cowPossibleMoves cow restCows
+                                in
+                                if Cow.isIdle cow then
+                                    Random.List.choose possibleMoves
+                                        |> Random.map Tuple.first
+                                        |> Random.map (Maybe.map (\position -> ( cowIndex, position )))
+
+                                else
+                                    Random.constant Nothing
+                            )
+                        |> Random.generate
+                            (\maybeCowWithTargetPosition ->
+                                case maybeCowWithTargetPosition of
+                                    Just ( cow, targetPosition ) ->
+                                        AnimateCow cow targetPosition
+
+                                    Nothing ->
+                                        Idle
+                            )
+            )
+
+        AnimateCow cowIndex targetPosition ->
+            ( model
+                |> gameLevelMap
+                    (\(Level cows) ->
+                        cows
+                            |> List.Nonempty.indexedMap
+                                (\index cow ->
+                                    if index == cowIndex then
+                                        Cow.headTo targetPosition cow
+
+                                    else
+                                        cow
+                                )
+                            |> Level
+                    )
+                |> Just
+            , Cmd.none
+            )
+
+        Idle ->
+            ( Just model
+            , Cmd.none
+            )
+
         ExitGame ->
             ( Nothing, Cmd.none )
 
@@ -100,12 +243,6 @@ update msg (Game state) =
 randomLevel : Random.Generator Level
 randomLevel =
     let
-        cellWidth =
-            levelCowSizeRatio * Cow.cowWidth
-
-        cellHeight =
-            levelCowSizeRatio * Cow.cowHeight
-
         cols =
             floor (meadowWidth / cellWidth)
 
@@ -135,7 +272,7 @@ randomLevel =
             (\( positions, cows ) ->
                 cows
                     |> List.Nonempty.zip positions
-                    |> List.Nonempty.map (\( position, cow ) -> Cow.moveTo position cow)
+                    |> List.Nonempty.map (\( position, cow ) -> Cow.teleportTo position cow)
                     |> Level
             )
 
@@ -166,7 +303,7 @@ view (Game { lives, score, level, screen }) =
                 [ Html.h2 [] [ Html.text "This is your cow:" ]
                 , level
                     |> getMyCow
-                    |> Cow.moveTo ( 0, 0 )
+                    |> Cow.teleportTo ( 0, 0 )
                     |> Cow.setSize ( Cow.cowWidth, Cow.cowHeight )
                     |> Cow.view Ready
                 , Html.button [ onClick Ready ] [ Html.text "I'm ready!" ]
@@ -238,3 +375,16 @@ viewCows (Level cows) =
         , preserveAspectRatio "xMidYMin meet"
         ]
         (meadow :: myCow :: restCows)
+
+
+subscription : Model -> Sub Msg
+subscription (Game { screen }) =
+    Sub.batch
+        [ Browser.Events.onAnimationFrame Tick
+        , case screen of
+            FindMyCow ->
+                Time.every 3000 (always DoSomeRandomAction)
+
+            _ ->
+                Sub.none
+        ]

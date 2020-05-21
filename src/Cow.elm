@@ -1,9 +1,9 @@
-module Cow exposing (Cow, cowHeight, cowWidth, moveTo, random, setSize, view)
+module Cow exposing (Cow, animator, cowHeight, cowWidth, getPosition, headTo, isIdle, random, setSize, teleportTo, view)
 
-import Html exposing (Html)
+import Animator
 import Random
 import Svg exposing (Svg, svg)
-import Svg.Attributes exposing (height, style, viewBox, width)
+import Svg.Attributes exposing (height, style, width)
 import Svg.Events exposing (onClick)
 import SvgBlob exposing (SvgBlob)
 
@@ -15,7 +15,7 @@ type alias CowPatch =
 type Cow
     = Cow
         { patches : List CowPatch
-        , position : ( Float, Float )
+        , position : Animator.Timeline ( Float, Float )
         , size : ( Float, Float )
         , action : CowAction
         }
@@ -96,16 +96,32 @@ random size =
             (\patches ->
                 Cow
                     { patches = patches
-                    , position = ( 0, 0 )
+                    , position = Animator.init ( 0, 0 )
                     , size = size
                     , action = Stand
                     }
             )
 
 
-moveTo : ( Float, Float ) -> Cow -> Cow
-moveTo position (Cow data) =
-    Cow { data | position = position }
+headTo : ( Float, Float ) -> Cow -> Cow
+headTo position (Cow data) =
+    Cow { data | position = data.position |> Animator.go (Animator.seconds 2) position }
+
+
+teleportTo : ( Float, Float ) -> Cow -> Cow
+teleportTo position (Cow data) =
+    Cow { data | position = Animator.init position }
+
+
+getPosition : Cow -> ( Float, Float )
+getPosition (Cow data) =
+    Animator.current data.position
+        |> Debug.log "getPosition"
+
+
+isIdle : Cow -> Bool
+isIdle (Cow { position }) =
+    Animator.previous position == Animator.current position
 
 
 setSize : ( Float, Float ) -> Cow -> Cow
@@ -113,12 +129,19 @@ setSize size (Cow data) =
     Cow { data | size = size }
 
 
+animator : Animator.Animator Cow
+animator =
+    Animator.animator
+        |> Animator.watching
+            (\(Cow { position }) -> position)
+            (\newPosition (Cow data) ->
+                Cow { data | position = newPosition }
+            )
+
+
 view : msg -> Cow -> Svg msg
 view onClickMsg (Cow { patches, position, size, action }) =
     let
-        ( x, y ) =
-            position
-
         ( width, height ) =
             size
 
@@ -171,14 +194,9 @@ view onClickMsg (Cow { patches, position, size, action }) =
                             [ SvgBlob.view blob ]
                     )
     in
-    --    svg
-    --        [ width (String.fromFloat cowWidth)
-    --        , height (String.fromFloat cowHeight)
-    --        , viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)
-    --        ]
     svg
-        [ Svg.Attributes.x <| String.fromFloat x
-        , Svg.Attributes.y <| String.fromFloat y
+        [ Animator.linear position (Tuple.first >> Animator.at >> Animator.leaveSmoothly 0.5 >> Animator.arriveSmoothly 0.5) |> String.fromFloat |> Svg.Attributes.x
+        , Animator.linear position (Tuple.second >> Animator.at >> Animator.leaveSmoothly 0.5 >> Animator.arriveSmoothly 0.5) |> String.fromFloat |> Svg.Attributes.y
         , Svg.Attributes.width <| String.fromFloat width
         , Svg.Attributes.height <| String.fromFloat height
         , Svg.Attributes.viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)

@@ -1,15 +1,11 @@
 module Main exposing (..)
 
 import Browser
-import Cow exposing (Cow)
 import Game
 import Html exposing (Html)
 import Html.Attributes exposing (src, style)
 import Html.Events exposing (onClick)
 import Platform.Sub
-import Random
-import Svg exposing (svg)
-import Svg.Attributes exposing (height, viewBox, width)
 
 
 type Model
@@ -28,12 +24,12 @@ main =
         { init = init
         , view = view
         , update = update
-        , subscriptions = \_ -> Platform.Sub.none
+        , subscriptions = subscriptions
         }
 
 
 init : () -> ( Model, Cmd Msg )
-init flags =
+init _ =
     ( Menu, Cmd.none )
 
 
@@ -72,3 +68,13 @@ view model =
 
         Game game ->
             Html.map GameMsg <| Game.view game
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model of
+        Game game ->
+            Sub.map GameMsg (Game.subscription game)
+
+        _ ->
+            Sub.none
