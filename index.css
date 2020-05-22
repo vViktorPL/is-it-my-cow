@@ -1,0 +1,27 @@
+@font-face {
+  font-family: "Calligraffitti";
+  src: url("./assets/fonts/Calligraffitti/Calligraffitti-Regular.ttf");
+}
+
+.swing {
+  animation: 5s ease 0s normal none infinite swing;
+  transform-origin: center 30%;
+}
+
+@keyframes swing {
+  0% {
+    transform: rotate(5deg);
+  }
+  50% {
+    transform: rotate(-5deg);
+  }
+  100% {
+    transform: rotate(5deg);
+  }
+}
+
+body {
+  background: rgb(222,230,239);
+  color: black;
+  font-family: Calligraffitti, fantasy;
+}

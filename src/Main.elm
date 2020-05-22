@@ -3,8 +3,9 @@ module Main exposing (..)
 import Browser
 import Game
 import Html exposing (Html)
-import Html.Attributes exposing (src, style)
+import Html.Attributes exposing (class, src, style)
 import Html.Events exposing (onClick)
+import Music
 import Platform.Sub
 
 
@@ -30,7 +31,7 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Menu, Cmd.none )
+    ( Menu, playTitleSong )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -48,10 +49,14 @@ update msg model =
                     ( Game newGameModel, Cmd.map GameMsg cmd )
 
                 _ ->
-                    ( Menu, Cmd.none )
+                    init ()
 
         ( GameMsg _, Menu ) ->
             ( Menu, Cmd.none )
+
+
+playTitleSong =
+    Music.playSong "Ludwigs_Steirische_Gaudi_-_11_-_Lucky_Peak_Walz_ID_24.mp3"
 
 
 view : Model -> Html Msg
@@ -60,7 +65,7 @@ view model =
         Menu ->
             Html.div [ style "text-align" "center" ]
                 [ Html.h1 [] [ Html.text "Is it my cow?" ]
-                , Html.img [ src "cowhead.svg" ] []
+                , Html.img [ src "cowhead.svg", class "swing" ] []
                 , Html.br [] []
                 , Html.br [] []
                 , Html.button [ onClick StartGame ] [ Html.text "Start" ]

@@ -6,6 +6,7 @@ import Html exposing (Html)
 import Html.Attributes exposing (style)
 import Html.Events exposing (onClick)
 import List.Nonempty exposing (Nonempty)
+import Music
 import Random
 import Random.List
 import Random.Nonempty
@@ -145,7 +146,9 @@ update : Msg -> Model -> ( Maybe Model, Cmd Msg )
 update msg ((Game state) as model) =
     case msg of
         Ready ->
-            ( Just <| Game { state | screen = FindMyCow }, Cmd.none )
+            ( Just <| Game { state | screen = FindMyCow }
+            , Music.playSong "Ludwigs_Steirische_Gaudi_-_01_-_Rosies_Dance_Polka_ID_22.mp3"
+            )
 
         CowMsg cow Cow.Clicked ->
             case state.level of
