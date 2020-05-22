@@ -1,7 +1,5 @@
 module Game exposing (Model, Msg, startGame, subscription, update, view)
 
-import Animator
-import Browser.Events
 import Cow exposing (Cow)
 import Grid
 import Html exposing (Html)
@@ -39,15 +37,13 @@ type Model
 
 type Msg
     = Ready
-    | Found
-    | Missed
     | GenerateNextLevel
     | NextLevel Level
     | TryAgain
     | ExitGame
-    | Tick Time.Posix
     | DoSomeRandomAction
     | AnimateCow Int ( Float, Float )
+    | CowMsg Cow Cow.Msg
     | Idle
 
 
@@ -87,19 +83,6 @@ cowsPerLevel =
     5
 
 
-animate : Time.Posix -> Model -> Model
-animate newTime (Game ({ level } as state)) =
-    Game
-        { state
-            | level =
-                case level of
-                    Level cows ->
-                        cows
-                            |> List.Nonempty.map (Animator.update newTime Cow.animator)
-                            |> Level
-        }
-
-
 gameLevelMap : (Level -> Level) -> Model -> Model
 gameLevelMap f (Game state) =
     Game { state | level = f state.level }
@@ -109,7 +92,7 @@ cowSlot : Cow -> ( Int, Int )
 cowSlot cow =
     let
         ( x, y ) =
-            Cow.getPosition cow
+            Cow.getTargetPosition cow
     in
     ( floor (x / cellWidth), floor ((y - meadowTop) / cellHeight) )
 
@@ -144,26 +127,53 @@ cowPossibleMoves cow restCows =
         |> List.map slotCoordsToPosition
 
 
+cowFound : Model -> ( Maybe Model, Cmd Msg )
+cowFound (Game state) =
+    ( Just <| Game { state | screen = Success, score = state.score + 10 }, Cmd.none )
+
+
+cowMissed : Model -> ( Maybe Model, Cmd Msg )
+cowMissed (Game state) =
+    if state.lives == 1 then
+        ( Just <| Game { state | screen = GameOver }, Cmd.none )
+
+    else
+        ( Just <| Game { state | screen = Failure, lives = state.lives - 1 }, Cmd.none )
+
+
 update : Msg -> Model -> ( Maybe Model, Cmd Msg )
 update msg ((Game state) as model) =
     case msg of
-        Tick newTime ->
-            ( Just <| animate newTime model
-            , Cmd.none
-            )
-
         Ready ->
             ( Just <| Game { state | screen = FindMyCow }, Cmd.none )
 
-        Found ->
-            ( Just <| Game { state | screen = Success, score = state.score + 10 }, Cmd.none )
+        CowMsg cow Cow.Clicked ->
+            case state.level of
+                Level cows ->
+                    if List.Nonempty.head cows == cow then
+                        cowFound model
 
-        Missed ->
-            if state.lives == 1 then
-                ( Just <| Game { state | screen = GameOver }, Cmd.none )
+                    else
+                        cowMissed model
 
-            else
-                ( Just <| Game { state | screen = Failure, lives = state.lives - 1 }, Cmd.none )
+        CowMsg cow innerMsg ->
+            ( Just <|
+                gameLevelMap
+                    (\(Level cows) ->
+                        List.Nonempty.map
+                            (\c ->
+                                if c == cow then
+                                    Cow.update innerMsg c
+
+                                else
+                                    c
+                            )
+                            cows
+                            |> Level
+                    )
+                    model
+            , Cmd.none
+            )
 
         GenerateNextLevel ->
             ( Just <| Game state, Random.generate NextLevel randomLevel )
@@ -191,13 +201,9 @@ update msg ((Game state) as model) =
                                     possibleMoves =
                                         cowPossibleMoves cow restCows
                                 in
-                                if Cow.isIdle cow then
-                                    Random.List.choose possibleMoves
-                                        |> Random.map Tuple.first
-                                        |> Random.map (Maybe.map (\position -> ( cowIndex, position )))
-
-                                else
-                                    Random.constant Nothing
+                                Random.List.choose possibleMoves
+                                    |> Random.map Tuple.first
+                                    |> Random.map (Maybe.map (\position -> ( cowIndex, position )))
                             )
                         |> Random.generate
                             (\maybeCowWithTargetPosition ->
@@ -303,7 +309,15 @@ view (Game { lives, score, level, screen }) =
                     |> getMyCow
                     |> Cow.teleportTo ( 0, 0 )
                     |> Cow.setSize ( Cow.cowWidth, Cow.cowHeight )
-                    |> Cow.view Ready
+                    |> Cow.viewStatic
+                    |> Html.map
+                        (\innerMsg ->
+                            if innerMsg == Cow.Clicked then
+                                Ready
+
+                            else
+                                Idle
+                        )
                 , Html.button [ onClick Ready ] [ Html.text "I'm ready!" ]
                 ]
 
@@ -359,12 +373,13 @@ viewCows (Level cows) =
         myCow =
             cows
                 |> List.Nonempty.head
-                |> Cow.view Found
+                |> Cow.view
+                |> Html.map (CowMsg (List.Nonempty.head cows))
 
         restCows =
             cows
                 |> List.Nonempty.tail
-                |> List.map (Cow.view Missed)
+                |> List.map (\cow -> Cow.view cow |> Html.map (CowMsg cow))
     in
     svg
         [ style "width" "100%"
@@ -377,12 +392,9 @@ viewCows (Level cows) =
 
 subscription : Model -> Sub Msg
 subscription (Game { screen }) =
-    Sub.batch
-        [ Browser.Events.onAnimationFrame Tick
-        , case screen of
-            FindMyCow ->
-                Time.every 3000 (always DoSomeRandomAction)
+    case screen of
+        FindMyCow ->
+            Time.every 3000 (always DoSomeRandomAction)
 
-            _ ->
-                Sub.none
-        ]
+        _ ->
+            Sub.none

@@ -1,9 +1,11 @@
-module Cow exposing (Cow, animator, cowHeight, cowWidth, getPosition, headTo, isIdle, random, setSize, teleportTo, view)
+module Cow exposing (Cow, Msg(..), cowHeight, cowWidth, getTargetPosition, headTo, random, setSize, teleportTo, update, view, viewStatic)
 
-import Animator
+import Html.Attributes
+import Html.Events
+import Json.Decode
 import Random
 import Svg exposing (Svg, svg)
-import Svg.Attributes exposing (height, style, width)
+import Svg.Attributes exposing (height, width)
 import Svg.Events exposing (onClick)
 import SvgBlob exposing (SvgBlob)
 
@@ -15,15 +17,38 @@ type alias CowPatch =
 type Cow
     = Cow
         { patches : List CowPatch
-        , position : Animator.Timeline ( Float, Float )
+        , targetPosition : ( Float, Float )
         , size : ( Float, Float )
         , action : CowAction
         }
 
 
 type CowAction
+    = Idle
+    | Walk Direction
+
+
+type Direction
+    = Left
+    | Right
+
+
+type LegAnimation
     = Stand
-    | Walk ( Float, Float )
+    | GoLeft Float
+
+
+type Msg
+    = Clicked
+    | ReachedTarget
+
+
+onTransitionEnd msg =
+    Html.Events.on "transitionend" (Json.Decode.succeed msg)
+
+
+onTransitionCancel msg =
+    Html.Events.on "transitioncancel" (Json.Decode.succeed msg)
 
 
 minPatches =
@@ -96,31 +121,45 @@ random size =
             (\patches ->
                 Cow
                     { patches = patches
-                    , position = Animator.init ( 0, 0 )
+                    , targetPosition = ( 0, 0 )
                     , size = size
-                    , action = Stand
+                    , action = Idle
                     }
             )
 
 
 headTo : ( Float, Float ) -> Cow -> Cow
 headTo position (Cow data) =
-    Cow { data | position = data.position |> Animator.go (Animator.seconds 2) position }
+    let
+        ( tX, tY ) =
+            position
+
+        ( pX, pY ) =
+            data.targetPosition
+
+        ( dX, dY ) =
+            ( tX - pX, tY - pY )
+
+        direction =
+            if dX <= 0 then
+                Left
+
+            else
+                Right
+
+        -- TODO: up/down
+    in
+    Cow { data | targetPosition = position, action = Walk direction }
 
 
 teleportTo : ( Float, Float ) -> Cow -> Cow
 teleportTo position (Cow data) =
-    Cow { data | position = Animator.init position }
+    Cow { data | targetPosition = position, action = Idle }
 
 
-getPosition : Cow -> ( Float, Float )
-getPosition (Cow data) =
-    Animator.current data.position
-
-
-isIdle : Cow -> Bool
-isIdle (Cow { position }) =
-    Animator.previous position == Animator.current position
+getTargetPosition : Cow -> ( Float, Float )
+getTargetPosition (Cow data) =
+    data.targetPosition
 
 
 setSize : ( Float, Float ) -> Cow -> Cow
@@ -128,18 +167,28 @@ setSize size (Cow data) =
     Cow { data | size = size }
 
 
-animator : Animator.Animator Cow
-animator =
-    Animator.animator
-        |> Animator.watching
-            (\(Cow { position }) -> position)
-            (\newPosition (Cow data) ->
-                Cow { data | position = newPosition }
-            )
+view : Cow -> Svg Msg
+view ((Cow { patches, targetPosition, size, action }) as model) =
+    let
+        ( targetX, targetY ) =
+            targetPosition
+    in
+    Svg.g
+        [ Svg.Attributes.transform <|
+            "translate("
+                ++ String.fromFloat targetX
+                ++ " "
+                ++ String.fromFloat targetY
+                ++ ")"
+        , onTransitionEnd ReachedTarget
+        , Html.Attributes.style "transition" "linear 3s"
+        ]
+        [ viewStatic model
+        ]
 
 
-view : msg -> Cow -> Svg msg
-view onClickMsg (Cow { patches, position, size, action }) =
+viewStatic : Cow -> Svg Msg
+viewStatic (Cow { patches, targetPosition, size, action }) =
     let
         ( width, height ) =
             size
@@ -192,23 +241,49 @@ view onClickMsg (Cow { patches, position, size, action }) =
                             ]
                             [ SvgBlob.view blob ]
                     )
+
+        rightLegAnim : LegAnimation
+        rightLegAnim =
+            case action of
+                Idle ->
+                    Stand
+
+                Walk _ ->
+                    GoLeft 0
+
+        leftLegAnim : LegAnimation
+        leftLegAnim =
+            case action of
+                Idle ->
+                    Stand
+
+                Walk _ ->
+                    GoLeft 0.5
     in
     svg
-        [ Animator.linear position (Tuple.first >> Animator.at >> Animator.leaveSmoothly 0.5 >> Animator.arriveSmoothly 0.5) |> String.fromFloat |> Svg.Attributes.x
-        , Animator.linear position (Tuple.second >> Animator.at >> Animator.leaveSmoothly 0.5 >> Animator.arriveSmoothly 0.5) |> String.fromFloat |> Svg.Attributes.y
-        , Svg.Attributes.width <| String.fromFloat width
+        [ Svg.Attributes.width <| String.fromFloat width
         , Svg.Attributes.height <| String.fromFloat height
         , Svg.Attributes.viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)
-        , style "cursor: pointer"
-        , onClick onClickMsg
+        , Html.Attributes.style "cursor" "pointer"
+        , onClick Clicked
         ]
-        [ cowBodyClipPath
-        , viewLeg ( cowBodyCX - cowBodyRX * 0.8, cowBodyCY * 0.9 )
-        , viewLeg ( cowBodyCX + cowBodyRX * 0.6, cowBodyCY * 0.9 )
-        , cowBody
-        , viewLeg ( cowBodyCX - cowBodyRX * 0.6, cowBodyCY )
-        , viewLeg ( cowBodyCX + cowBodyRX * 0.8, cowBodyCY )
-        , cowHead
+        [ Svg.g
+            -- Flip cow when walking right
+            (if action == Walk Right then
+                [ Svg.Attributes.transform <| "scale(-1 1) translate(" ++ String.fromFloat -cowWidth ++ " 0)"
+                ]
+
+             else
+                []
+            )
+            [ cowBodyClipPath
+            , viewLeg ( cowBodyCX - cowBodyRX * 0.8, cowBodyCY * 0.9 ) rightLegAnim
+            , viewLeg ( cowBodyCX + cowBodyRX * 0.6, cowBodyCY * 0.9 ) rightLegAnim
+            , cowBody
+            , viewLeg ( cowBodyCX - cowBodyRX * 0.6, cowBodyCY ) leftLegAnim
+            , viewLeg ( cowBodyCX + cowBodyRX * 0.8, cowBodyCY ) leftLegAnim
+            , cowHead
+            ]
         ]
 
 
@@ -216,8 +291,8 @@ cowStepSize =
     cowBodyRY * 0.2
 
 
-viewLeg : ( Float, Float ) -> Svg msg
-viewLeg ( x, y ) =
+viewLeg : ( Float, Float ) -> LegAnimation -> Svg msg
+viewLeg ( x, y ) animation =
     let
         cy =
             y + cowBodyRY * 0.7
@@ -230,5 +305,49 @@ viewLeg ( x, y ) =
             , Svg.Attributes.cy <| String.fromFloat cy
             , Svg.Attributes.style "fill: white; stroke: black"
             ]
-            []
+            (case animation of
+                GoLeft delay ->
+                    [ Svg.animateMotion
+                        [ Svg.Attributes.path <|
+                            pathCmds
+                                [ ( 'M', [ ( 0, 0 ) ] )
+                                , ( 'C', [ ( 0, 0 ), ( -cowStepSize, -cowStepSize ), ( -cowStepSize, 0 ) ] )
+                                , ( 'L', [ ( 0, 0 ) ] )
+                                ]
+                        , Svg.Attributes.dur "1s"
+                        , Svg.Attributes.repeatCount "indefinite"
+                        , Svg.Attributes.begin (String.fromFloat delay ++ "s")
+                        ]
+                        []
+                    ]
+
+                _ ->
+                    []
+            )
         ]
+
+
+pathCmds : List ( Char, List ( Float, Float ) ) -> String
+pathCmds cmds =
+    cmds
+        |> List.map (\( cmd, points ) -> pathCmd cmd points)
+        |> String.join " "
+
+
+pathCmd : Char -> List ( Float, Float ) -> String
+pathCmd cmd points =
+    String.fromChar cmd
+        ++ (points
+                |> List.map (\( x, y ) -> String.fromFloat x ++ "," ++ String.fromFloat y)
+                |> String.join " "
+           )
+
+
+update : Msg -> Cow -> Cow
+update msg (Cow state) =
+    case msg of
+        ReachedTarget ->
+            Cow { state | action = Idle }
+
+        _ ->
+            Cow state
