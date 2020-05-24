@@ -1,4 +1,4 @@
-module Cow exposing (Cow, Msg(..), cowHeight, cowWidth, getTargetPosition, headTo, random, setSize, teleportTo, update, view, viewStatic)
+module Cow exposing (Cow, Msg(..), cowHeight, cowWidth, getTargetPosition, headTo, random, setScale, teleportTo, update, view, viewStatic)
 
 import Html.Attributes
 import Html.Events
@@ -18,7 +18,7 @@ type Cow
     = Cow
         { patches : List CowPatch
         , targetPosition : ( Float, Float )
-        , size : ( Float, Float )
+        , scale : Float
         , action : CowAction
         }
 
@@ -113,8 +113,8 @@ randomPatch =
         |> Random.andThen (\randomBlob -> Random.pair randomBlob randomPosition)
 
 
-random : ( Float, Float ) -> Random.Generator Cow
-random size =
+random : Float -> Random.Generator Cow
+random scale =
     Random.int minPatches maxPatches
         |> Random.andThen (\patchesCount -> Random.list patchesCount randomPatch)
         |> Random.map
@@ -122,7 +122,7 @@ random size =
                 Cow
                     { patches = patches
                     , targetPosition = ( 0, 0 )
-                    , size = size
+                    , scale = scale
                     , action = Idle
                     }
             )
@@ -162,37 +162,34 @@ getTargetPosition (Cow data) =
     data.targetPosition
 
 
-setSize : ( Float, Float ) -> Cow -> Cow
-setSize size (Cow data) =
-    Cow { data | size = size }
+setScale : Float -> Cow -> Cow
+setScale newScale (Cow data) =
+    Cow { data | scale = newScale }
 
 
 view : Cow -> Svg Msg
-view ((Cow { patches, targetPosition, size, action }) as model) =
+view ((Cow { patches, targetPosition, scale, action }) as model) =
     let
         ( targetX, targetY ) =
             targetPosition
     in
     Svg.g
-        [ Svg.Attributes.transform <|
+        [ onTransitionEnd ReachedTarget
+        , Html.Attributes.style "transition" "transform linear 3s"
+        , Html.Attributes.style "transform" <|
             "translate("
                 ++ String.fromFloat targetX
-                ++ " "
+                ++ "px,"
                 ++ String.fromFloat targetY
-                ++ ")"
-        , onTransitionEnd ReachedTarget
-        , Html.Attributes.style "transition" "linear 3s"
+                ++ "px)"
         ]
         [ viewStatic model
         ]
 
 
 viewStatic : Cow -> Svg Msg
-viewStatic (Cow { patches, targetPosition, size, action }) =
+viewStatic (Cow { patches, targetPosition, scale, action }) =
     let
-        ( width, height ) =
-            size
-
         cowHead =
             Svg.image
                 [ Svg.Attributes.xlinkHref "cowhead.svg"
@@ -260,10 +257,11 @@ viewStatic (Cow { patches, targetPosition, size, action }) =
                 Walk _ ->
                     GoLeft 0.5
     in
-    svg
-        [ Svg.Attributes.width <| String.fromFloat width
-        , Svg.Attributes.height <| String.fromFloat height
-        , Svg.Attributes.viewBox ("0 0 " ++ String.fromFloat cowWidth ++ " " ++ String.fromFloat cowHeight)
+    Svg.g
+        [ Html.Attributes.style "transform" <|
+            "scale("
+                ++ String.fromFloat scale
+                ++ ")"
         , Html.Attributes.style "cursor" "pointer"
         , onClick Clicked
         ]

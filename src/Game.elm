@@ -272,7 +272,7 @@ randomLevel =
                     )
 
         randomCows =
-            Random.Nonempty.nonempty cowsPerLevel (Cow.random ( cellWidth, cellHeight ))
+            Random.Nonempty.nonempty cowsPerLevel (Cow.random levelCowSizeRatio)
     in
     Random.pair randomCowPositions randomCows
         |> Random.map
@@ -311,7 +311,7 @@ view (Game { lives, score, level, screen }) =
                 , level
                     |> getMyCow
                     |> Cow.teleportTo ( 0, 0 )
-                    |> Cow.setSize ( Cow.cowWidth, Cow.cowHeight )
+                    |> Cow.setScale 1
                     |> Cow.viewStatic
                     |> Html.map
                         (\innerMsg ->
@@ -321,6 +321,11 @@ view (Game { lives, score, level, screen }) =
                             else
                                 Idle
                         )
+                    |> List.singleton
+                    |> Svg.svg
+                        [ Svg.Attributes.width <| String.fromFloat Cow.cowWidth
+                        , Svg.Attributes.height <| String.fromFloat Cow.cowHeight
+                        ]
                 , Html.button [ onClick Ready ] [ Html.text "I'm ready!" ]
                 ]
 
