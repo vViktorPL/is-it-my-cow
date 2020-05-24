@@ -89,6 +89,15 @@ gameLevelMap f (Game state) =
     Game { state | level = f state.level }
 
 
+myCowMap : (Cow -> Cow) -> Level -> Level
+myCowMap f ((Level cows) as level) =
+    let
+        myCowUpdated =
+            f <| getMyCow level
+    in
+    Level <| List.Nonempty.replaceHead myCowUpdated cows
+
+
 cowSlot : Cow -> ( Int, Int )
 cowSlot cow =
     let
@@ -151,13 +160,16 @@ update msg ((Game state) as model) =
             )
 
         CowMsg cow Cow.Clicked ->
-            case state.level of
-                Level cows ->
+            case ( state.level, state.screen ) of
+                ( Level cows, FindMyCow ) ->
                     if List.Nonempty.head cows == cow then
                         cowFound model
 
                     else
                         cowMissed model
+
+                _ ->
+                    ( Just <| model, Cmd.none )
 
         CowMsg cow innerMsg ->
             ( Just <|
@@ -340,15 +352,25 @@ view (Game { lives, score, level, screen }) =
                 ]
 
         Success ->
-            Html.div []
-                [ Html.text "You've found it! 🎉"
-                , Html.button [ onClick GenerateNextLevel ] [ Html.text "Next level" ]
+            Html.div
+                []
+                [ level
+                    |> myCowMap Cow.happyJump
+                    |> viewCows
+                , viewCloud
+                    [ Html.p [] [ Html.text "You've found it! 🎉" ]
+                    , Html.button [ onClick GenerateNextLevel ] [ Html.text "Next level" ]
+                    ]
                 ]
 
         Failure ->
-            Html.div []
-                [ Html.text "Oh no! It's not your cow!"
-                , Html.button [ onClick TryAgain ] [ Html.text "Try again" ]
+            Html.div
+                []
+                [ viewCows level
+                , viewCloud
+                    [ Html.p [] [ Html.text "Oh no! It's not your cow! 😔" ]
+                    , Html.button [ onClick TryAgain ] [ Html.text "Try again" ]
+                    ]
                 ]
 
         GameOver ->
@@ -395,7 +417,7 @@ viewCows (Level cows) =
         , viewBox ([ 0, 0, screenWidth, screenHeight ] |> List.map String.fromInt |> String.join " ")
         , preserveAspectRatio "xMidYMax meet"
         ]
-        (meadow :: myCow :: restCows)
+        (meadow :: List.reverse (myCow :: restCows))
 
 
 subscription : Model -> Sub Msg
@@ -406,3 +428,24 @@ subscription (Game { screen }) =
 
         _ ->
             Sub.none
+
+
+viewCloud children =
+    Html.div
+        [ style "position" "absolute"
+        , style "top" "0"
+        , style "left" "0"
+        , style "right" "0"
+        , style "height" "30vh"
+        , style "background" "url('cloud.svg')"
+        , style "display" "flex"
+        , style "align-items" "center"
+        , style "justify-content" "center"
+        , style "background-size" "contain"
+        , style "background-repeat" "no-repeat"
+        , style "background-position" "center"
+        , style "font-size" "3.5vh"
+        ]
+        [ Html.div [ style "display" "block", style "text-align" "center" ]
+            children
+        ]

@@ -20,8 +20,25 @@
   }
 }
 
+.jump {
+  animation: 1.2s linear 0s normal none infinite jump;
+}
+
+@keyframes jump {
+  40% {
+    transform: rotate(20deg) translateY(-120px);
+  }
+  50% {
+    transform: rotate(15deg) translateY(-120px);
+  }
+  60% {
+    transform: rotate(-5deg) translateY(-100px);
+  }
+}
+
 body {
   background: rgb(222,230,239);
   color: black;
   font-family: Calligraffitti, fantasy;
+  margin: 0;
 }

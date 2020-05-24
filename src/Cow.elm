@@ -1,4 +1,19 @@
-module Cow exposing (Cow, Msg(..), cowHeight, cowWidth, getTargetPosition, headTo, random, setScale, teleportTo, update, view, viewStatic)
+module Cow exposing
+    ( Cow
+    , Msg(..)
+    , cowHeight
+    , cowWidth
+    , getTargetPosition
+    , happyJump
+    , headTo
+    , lookSad
+    , random
+    , setScale
+    , teleportTo
+    , update
+    , view
+    , viewStatic
+    )
 
 import Html.Attributes
 import Html.Events
@@ -26,6 +41,8 @@ type Cow
 type CowAction
     = Idle
     | Walk Direction
+    | HappyJump
+    | LookSad
 
 
 type Direction
@@ -183,7 +200,16 @@ view ((Cow { patches, targetPosition, scale, action }) as model) =
                 ++ String.fromFloat targetY
                 ++ "px)"
         ]
-        [ viewStatic model
+        [ Svg.g
+            (if action == HappyJump then
+                [ Svg.Attributes.class "jump"
+                ]
+
+             else
+                []
+            )
+            [ viewStatic model
+            ]
         ]
 
 
@@ -192,7 +218,17 @@ viewStatic (Cow { patches, targetPosition, scale, action }) =
     let
         cowHead =
             Svg.image
-                [ Svg.Attributes.xlinkHref "cowhead.svg"
+                [ Svg.Attributes.xlinkHref
+                    (case action of
+                        HappyJump ->
+                            "happy-cow-head.svg"
+
+                        LookSad ->
+                            "sad-cow-head.svg"
+
+                        _ ->
+                            "cowhead.svg"
+                    )
                 , Svg.Attributes.width "120"
                 , Svg.Attributes.height "120"
                 ]
@@ -242,20 +278,20 @@ viewStatic (Cow { patches, targetPosition, scale, action }) =
         rightLegAnim : LegAnimation
         rightLegAnim =
             case action of
-                Idle ->
-                    Stand
-
                 Walk _ ->
                     GoLeft 0
+
+                _ ->
+                    Stand
 
         leftLegAnim : LegAnimation
         leftLegAnim =
             case action of
-                Idle ->
-                    Stand
-
                 Walk _ ->
                     GoLeft 0.5
+
+                _ ->
+                    Stand
     in
     Svg.g
         [ Html.Attributes.style "transform" <|
@@ -349,3 +385,13 @@ update msg (Cow state) =
 
         _ ->
             Cow state
+
+
+happyJump : Cow -> Cow
+happyJump (Cow state) =
+    Cow { state | action = HappyJump }
+
+
+lookSad : Cow -> Cow
+lookSad (Cow state) =
+    Cow { state | action = LookSad }
