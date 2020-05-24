@@ -393,7 +393,7 @@ viewCows (Level cows) =
         [ style "width" "100%"
         , style "height" "100%"
         , viewBox ([ 0, 0, screenWidth, screenHeight ] |> List.map String.fromInt |> String.join " ")
-        , preserveAspectRatio "xMidYMin meet"
+        , preserveAspectRatio "xMidYMax meet"
         ]
         (meadow :: myCow :: restCows)
 
