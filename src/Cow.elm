@@ -7,6 +7,7 @@ module Cow exposing
     , happyJump
     , headTo
     , lookSad
+    , mutate
     , random
     , setScale
     , teleportTo
@@ -19,6 +20,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Random
+import Random.List
 import Svg exposing (Svg, svg)
 import Svg.Attributes exposing (height, width)
 import Svg.Events exposing (onClick)
@@ -68,11 +70,11 @@ onTransitionCancel msg =
     Html.Events.on "transitioncancel" (Json.Decode.succeed msg)
 
 
-minPatches =
+minPatchesNodeCount =
     4
 
 
-maxPatches =
+maxPatchesNodeCount =
     8
 
 
@@ -113,14 +115,14 @@ randomPatch =
     let
         randomPosition =
             Random.pair
-                (Random.float (cowBodyCX - cowBodyRX - minPatchSize) (cowBodyCX + cowBodyRX - minPatchSize))
-                (Random.float (cowBodyCY - cowBodyRY - minPatchSize) (cowBodyCY + cowBodyRY - minPatchSize))
+                (Random.float (cowBodyCX - cowBodyRX) (cowBodyCX + cowBodyRX - minPatchSize))
+                (Random.float (cowBodyCY - cowBodyRY) (cowBodyCY + cowBodyRY - minPatchSize))
 
         randomSize =
             Random.float minPatchSize maxPatchSize
 
         randomNodeCount =
-            Random.int minPatches maxPatches
+            Random.int minPatchesNodeCount maxPatchesNodeCount
     in
     Random.map3
         SvgBlob.random
@@ -130,8 +132,8 @@ randomPatch =
         |> Random.andThen (\randomBlob -> Random.pair randomBlob randomPosition)
 
 
-random : Float -> Random.Generator Cow
-random scale =
+random : ( Int, Int ) -> Random.Generator Cow
+random ( minPatches, maxPatches ) =
     Random.int minPatches maxPatches
         |> Random.andThen (\patchesCount -> Random.list patchesCount randomPatch)
         |> Random.map
@@ -139,10 +141,62 @@ random scale =
                 Cow
                     { patches = patches
                     , targetPosition = ( 0, 0 )
-                    , scale = scale
+                    , scale = 1
                     , action = Idle
                     }
             )
+
+
+isEven : Int -> Bool
+isEven n =
+    modBy 2 n == 0
+
+
+pseudoRandomSignFromFloat : Float -> Float
+pseudoRandomSignFromFloat seed =
+    if isEven (ceiling seed) then
+        -1
+
+    else
+        1
+
+
+mutate : Float -> Float -> Cow -> Cow
+mutate similarityFactor seed (Cow ({ patches } as sourceCowData)) =
+    let
+        movePatchRelativeDistance =
+            (1 - similarityFactor) * seed
+
+        patchesCount =
+            List.length patches
+
+        mutatedPatches =
+            patches
+                |> List.sortBy (Tuple.mapFirst SvgBlob.size)
+                |> List.indexedMap
+                    (\index patch ->
+                        if toFloat index / toFloat patchesCount <= (1 - similarityFactor) then
+                            Tuple.mapSecond
+                                (\( x, y ) ->
+                                    let
+                                        ( sizeX, sizeY ) =
+                                            patch |> Tuple.first |> SvgBlob.size
+
+                                        dx =
+                                            sizeX * movePatchRelativeDistance * pseudoRandomSignFromFloat (x * seed)
+
+                                        dy =
+                                            sizeY * movePatchRelativeDistance * pseudoRandomSignFromFloat (y * seed)
+                                    in
+                                    ( x + dx, y + dy )
+                                )
+                                patch
+
+                        else
+                            patch
+                    )
+    in
+    Cow { sourceCowData | patches = mutatedPatches }
 
 
 headTo : ( Float, Float ) -> Cow -> Cow

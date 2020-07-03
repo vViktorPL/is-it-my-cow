@@ -1,6 +1,7 @@
 module Game exposing (Model, Msg, startGame, subscription, update, view)
 
 import Cow exposing (Cow)
+import Difficulty exposing (LevelDifficultyParams, Timeout(..))
 import Grid
 import Html exposing (Html)
 import Html.Attributes exposing (style)
@@ -16,7 +17,7 @@ import Time
 
 
 type Level
-    = Level (Nonempty Cow)
+    = Level Int (Nonempty Cow)
 
 
 type GameScreen
@@ -90,12 +91,12 @@ gameLevelMap f (Game state) =
 
 
 myCowMap : (Cow -> Cow) -> Level -> Level
-myCowMap f ((Level cows) as level) =
+myCowMap f ((Level lvlNumber cows) as level) =
     let
         myCowUpdated =
             f <| getMyCow level
     in
-    Level <| List.Nonempty.replaceHead myCowUpdated cows
+    Level lvlNumber <| List.Nonempty.replaceHead myCowUpdated cows
 
 
 cowSlot : Cow -> ( Int, Int )
@@ -161,7 +162,7 @@ update msg ((Game state) as model) =
 
         CowMsg cow Cow.Clicked ->
             case ( state.level, state.screen ) of
-                ( Level cows, FindMyCow ) ->
+                ( Level _ cows, FindMyCow ) ->
                     if List.Nonempty.head cows == cow then
                         cowFound model
 
@@ -174,7 +175,7 @@ update msg ((Game state) as model) =
         CowMsg cow innerMsg ->
             ( Just <|
                 gameLevelMap
-                    (\(Level cows) ->
+                    (\(Level lvlNumber cows) ->
                         List.Nonempty.map
                             (\c ->
                                 if c == cow then
@@ -184,14 +185,20 @@ update msg ((Game state) as model) =
                                     c
                             )
                             cows
-                            |> Level
+                            |> Level lvlNumber
                     )
                     model
             , Cmd.none
             )
 
         GenerateNextLevel ->
-            ( Just <| Game state, Random.generate NextLevel randomLevel )
+            ( Just <| Game state
+            , state.level
+                |> getLevelNumber
+                |> (+) 1
+                |> randomLevel
+                |> Random.generate NextLevel
+            )
 
         NextLevel level ->
             ( Just <| Game { state | level = level, screen = MyCow }, Cmd.none )
@@ -202,7 +209,7 @@ update msg ((Game state) as model) =
         DoSomeRandomAction ->
             ( Just model
             , case state.level of
-                Level cows ->
+                Level _ cows ->
                     Random.int 0 (List.Nonempty.length cows)
                         |> Random.andThen
                             (\cowIndex ->
@@ -234,7 +241,7 @@ update msg ((Game state) as model) =
         AnimateCow cowIndex targetPosition ->
             ( model
                 |> gameLevelMap
-                    (\(Level cows) ->
+                    (\(Level lvlNumber cows) ->
                         cows
                             |> List.Nonempty.indexedMap
                                 (\index cow ->
@@ -244,7 +251,7 @@ update msg ((Game state) as model) =
                                     else
                                         cow
                                 )
-                            |> Level
+                            |> Level lvlNumber
                     )
                 |> Just
             , Cmd.none
@@ -259,9 +266,12 @@ update msg ((Game state) as model) =
             ( Nothing, Cmd.none )
 
 
-randomLevel : Random.Generator Level
-randomLevel =
+randomLevel : Int -> Random.Generator Level
+randomLevel lvlNumber =
     let
+        { randomCowsCount, mutatedCowsCount, mutantSimilarity, patchesPerCow, levelTimeout, myCowScreenTimeout } =
+            Difficulty.forLevelNumber lvlNumber
+
         cols =
             floor (meadowWidth / cellWidth)
 
@@ -273,7 +283,7 @@ randomLevel =
 
         randomCowPositions =
             cowPositionSlots
-                |> Grid.pickRandom2DGridCells cowsPerLevel
+                |> Grid.pickRandom2DGridCells (randomCowsCount + mutatedCowsCount)
                 |> Random.map
                     (List.Nonempty.map
                         (\( slotX, slotY ) ->
@@ -284,15 +294,39 @@ randomLevel =
                     )
 
         randomCows =
-            Random.Nonempty.nonempty cowsPerLevel (Cow.random levelCowSizeRatio)
+            Random.Nonempty.nonempty (randomCowsCount - 1) (Cow.random patchesPerCow)
+                |> Random.andThen
+                    (\baseCows ->
+                        let
+                            randomMutatedCows : Random.Generator (Nonempty Cow)
+                            randomMutatedCows =
+                                Random.Nonempty.nonempty
+                                    (mutatedCowsCount - 1)
+                                    (Random.pair
+                                        (Random.float 0 1)
+                                        (Random.Nonempty.choose baseCows)
+                                        |> Random.map
+                                            (\( seed, cow ) ->
+                                                Cow.mutate mutantSimilarity seed cow
+                                            )
+                                    )
+                        in
+                        randomMutatedCows
+                            |> Random.map (List.Nonempty.append baseCows)
+                    )
     in
     Random.pair randomCowPositions randomCows
         |> Random.map
             (\( positions, cows ) ->
                 cows
                     |> List.Nonempty.zip positions
-                    |> List.Nonempty.map (\( position, cow ) -> Cow.teleportTo position cow)
-                    |> Level
+                    |> List.Nonempty.map
+                        (\( position, cow ) ->
+                            cow
+                                |> Cow.teleportTo position
+                                |> Cow.setScale levelCowSizeRatio
+                        )
+                    |> Level lvlNumber
             )
 
 
@@ -303,13 +337,13 @@ init level =
 
 startGame : (Model -> msg) -> Cmd msg
 startGame tagger =
-    randomLevel
+    randomLevel 1
         |> Random.map init
         |> Random.generate tagger
 
 
 getMyCow : Level -> Cow
-getMyCow (Level cows) =
+getMyCow (Level _ cows) =
     List.Nonempty.head cows
 
 
@@ -390,7 +424,7 @@ viewStatusBar lives score =
 
 
 viewCows : Level -> Html Msg
-viewCows (Level cows) =
+viewCows (Level _ cows) =
     let
         meadow =
             Svg.image
@@ -449,3 +483,8 @@ viewCloud children =
         [ Html.div [ style "display" "block", style "text-align" "center" ]
             children
         ]
+
+
+getLevelNumber : Level -> Int
+getLevelNumber (Level lvlNumber _) =
+    lvlNumber

@@ -1,4 +1,4 @@
-module SvgBlob exposing (SvgBlob, random, view)
+module SvgBlob exposing (SvgBlob, random, size, view)
 
 import Curve exposing (catmullRomClosed)
 import Random
@@ -77,6 +77,13 @@ fromPoints points =
         { points = points
         , curvedPath = catmullRomClosed 1.0 points |> SubPath.toString
         }
+
+
+size : SvgBlob -> ( Float, Float )
+size (SvgBlob { points }) =
+    ( points |> List.map Tuple.first |> List.maximum |> Maybe.withDefault 0
+    , points |> List.map Tuple.second |> List.maximum |> Maybe.withDefault 0
+    )
 
 
 view : SvgBlob -> Svg msg
