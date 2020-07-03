@@ -6,15 +6,27 @@ import List exposing (repeat)
 
 distribution : Array LevelDifficultyParams
 distribution =
-    [ easy, medium, hard, veryHard, impossible ]
-        |> List.concatMap (repeat 5)
+    [ ( 3, easy )
+    , ( 5, medium )
+    , ( 10, hard )
+    , ( 10, veryHard )
+    , ( 1, highestDifficultyLevel )
+    ]
+        |> List.concatMap
+            (\( count, difficulty ) ->
+                repeat count difficulty
+            )
         |> Array.fromList
+
+
+highestDifficultyLevel =
+    impossible
 
 
 forLevelNumber : Int -> LevelDifficultyParams
 forLevelNumber levelNumber =
     Array.get (levelNumber - 1) distribution
-        |> Maybe.withDefault impossible
+        |> Maybe.withDefault highestDifficultyLevel
 
 
 easy : LevelDifficultyParams
