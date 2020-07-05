@@ -440,7 +440,12 @@ viewReadyButton { myCowScreenTimeout } =
             else
                 "I'm ready! (" ++ Timeout.toString myCowScreenTimeout ++ ")"
     in
-    Html.button [ onClick Ready ] [ Html.text label ]
+    Html.button
+        [ onClick Ready
+        , style "position" "absolute"
+        , style "bottom" "220px"
+        ]
+        [ Html.text label ]
 
 
 view : Model -> Html Msg
@@ -448,8 +453,19 @@ view (Game { lives, score, level, screen }) =
     case screen of
         MyCow ->
             Html.div
-                []
-                [ Html.h2 [] [ Html.text "This is your cow:" ]
+                [ style "background-image" "url('barn-landscape.svg')"
+                , style "background-size" "cover"
+                , style "width" <| String.fromInt screenWidth ++ "px"
+                , style "height" <| String.fromInt screenHeight ++ "px"
+                , style "text-align" "center"
+                , style "position" "relative"
+                ]
+                [ Html.h2
+                    [ style "position" "absolute"
+                    , style "left" "0"
+                    , style "right" "0"
+                    ]
+                    [ Html.text "This is your cow:" ]
                 , level
                     |> getMyCow
                     |> Cow.teleportTo ( 0, 0 )
@@ -467,6 +483,9 @@ view (Game { lives, score, level, screen }) =
                     |> Svg.svg
                         [ Svg.Attributes.width <| String.fromFloat Cow.cowWidth
                         , Svg.Attributes.height <| String.fromFloat Cow.cowHeight
+                        , style "position" "absolute"
+                        , style "left" "250px"
+                        , style "bottom" "0"
                         ]
                 , viewReadyButton level
                 ]
