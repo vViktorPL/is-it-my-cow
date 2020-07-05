@@ -1,7 +1,7 @@
 module Game exposing (Model, Msg, startGame, subscription, update, view)
 
 import Cow exposing (Cow)
-import Difficulty exposing (LevelDifficultyParams, Timeout(..))
+import Difficulty exposing (LevelDifficultyParams)
 import Grid
 import Html exposing (Html)
 import Html.Attributes exposing (style)
@@ -13,19 +13,29 @@ import Random.List
 import Random.Nonempty
 import Svg exposing (svg)
 import Svg.Attributes exposing (height, preserveAspectRatio, viewBox, width, xlinkHref)
-import Time
+import Time exposing (Posix)
+import Timeout exposing (Timeout)
 
 
-type Level
-    = Level Int (Nonempty Cow)
+type alias Level =
+    { number : Int
+    , cows : Nonempty Cow
+    , myCowScreenTimeout : Timeout
+    , findMyCowTimeout : Timeout
+    }
 
 
 type GameScreen
     = MyCow
     | FindMyCow
     | Success
-    | Failure
+    | Failure FailureReason
     | GameOver
+
+
+type FailureReason
+    = WrongCow
+    | TimesUp
 
 
 type Model
@@ -39,14 +49,18 @@ type Model
 
 type Msg
     = Ready
+    | ShowLevel Timeout
     | GenerateNextLevel
     | NextLevel Level
     | TryAgain
+    | ShowMyCowScreen Timeout
     | ExitGame
     | DoSomeRandomAction
     | AnimateCow Int ( Float, Float )
     | CowMsg Cow Cow.Msg
     | Idle
+    | FindMyCowTimeoutMsg Timeout.Msg
+    | MyCowScreenTimeoutMsg Timeout.Msg
 
 
 screenWidth =
@@ -81,22 +95,19 @@ levelCowSizeRatio =
     0.5
 
 
-cowsPerLevel =
-    5
-
-
 gameLevelMap : (Level -> Level) -> Model -> Model
 gameLevelMap f (Game state) =
     Game { state | level = f state.level }
 
 
 myCowMap : (Cow -> Cow) -> Level -> Level
-myCowMap f ((Level lvlNumber cows) as level) =
-    let
-        myCowUpdated =
-            f <| getMyCow level
-    in
-    Level lvlNumber <| List.Nonempty.replaceHead myCowUpdated cows
+myCowMap f level =
+    { level | cows = nonemptyMapHead f level.cows }
+
+
+nonemptyMapHead : (a -> a) -> Nonempty a -> Nonempty a
+nonemptyMapHead f list =
+    List.Nonempty.replaceHead (f <| List.Nonempty.head list) list
 
 
 cowSlot : Cow -> ( Int, Int )
@@ -143,31 +154,41 @@ cowFound (Game state) =
     ( Just <| Game { state | screen = Success, score = state.score + 10 }, Cmd.none )
 
 
-cowMissed : Model -> ( Maybe Model, Cmd Msg )
-cowMissed (Game state) =
+cowMissed : FailureReason -> Model -> ( Maybe Model, Cmd Msg )
+cowMissed failureReason (Game state) =
     if state.lives == 1 then
         ( Just <| Game { state | screen = GameOver }, Cmd.none )
 
     else
-        ( Just <| Game { state | screen = Failure, lives = state.lives - 1 }, Cmd.none )
+        ( Just <| Game { state | screen = Failure failureReason, lives = state.lives - 1 }, Cmd.none )
 
 
 update : Msg -> Model -> ( Maybe Model, Cmd Msg )
 update msg ((Game state) as model) =
     case msg of
         Ready ->
-            ( Just <| Game { state | screen = FindMyCow }
+            ( Just model
+            , Timeout.start ShowLevel state.level.findMyCowTimeout
+            )
+
+        ShowLevel timeout ->
+            ( Game { state | screen = FindMyCow }
+                |> gameLevelMap
+                    (\level ->
+                        { level | findMyCowTimeout = timeout }
+                    )
+                |> Just
             , Music.playSong "Ludwigs_Steirische_Gaudi_-_01_-_Rosies_Dance_Polka_ID_22.mp3"
             )
 
         CowMsg cow Cow.Clicked ->
-            case ( state.level, state.screen ) of
-                ( Level _ cows, FindMyCow ) ->
-                    if List.Nonempty.head cows == cow then
+            case state.screen of
+                FindMyCow ->
+                    if List.Nonempty.head state.level.cows == cow then
                         cowFound model
 
                     else
-                        cowMissed model
+                        cowMissed WrongCow model
 
                 _ ->
                     ( Just <| model, Cmd.none )
@@ -175,17 +196,19 @@ update msg ((Game state) as model) =
         CowMsg cow innerMsg ->
             ( Just <|
                 gameLevelMap
-                    (\(Level lvlNumber cows) ->
-                        List.Nonempty.map
-                            (\c ->
-                                if c == cow then
-                                    Cow.update innerMsg c
+                    (\level ->
+                        { level
+                            | cows =
+                                List.Nonempty.map
+                                    (\c ->
+                                        if c == cow then
+                                            Cow.update innerMsg c
 
-                                else
-                                    c
-                            )
-                            cows
-                            |> Level lvlNumber
+                                        else
+                                            c
+                                    )
+                                    level.cows
+                        }
                     )
                     model
             , Cmd.none
@@ -201,61 +224,115 @@ update msg ((Game state) as model) =
             )
 
         NextLevel level ->
-            ( Just <| Game { state | level = level, screen = MyCow }, Cmd.none )
+            ( Just <| Game { state | level = level }
+            , Timeout.start ShowMyCowScreen level.findMyCowTimeout
+            )
 
         TryAgain ->
-            ( Just <| Game { state | screen = MyCow }, Cmd.none )
+            ( Just model
+            , Timeout.start ShowMyCowScreen state.level.myCowScreenTimeout
+            )
+
+        ShowMyCowScreen timeout ->
+            ( Game { state | screen = MyCow }
+                |> gameLevelMap
+                    (\level ->
+                        { level
+                            | myCowScreenTimeout = timeout
+                        }
+                    )
+                |> Just
+            , Cmd.none
+            )
 
         DoSomeRandomAction ->
             ( Just model
-            , case state.level of
-                Level _ cows ->
-                    Random.int 0 (List.Nonempty.length cows)
-                        |> Random.andThen
-                            (\cowIndex ->
-                                let
-                                    cow =
-                                        List.Nonempty.get cowIndex cows
+            , Random.int 0 (List.Nonempty.length state.level.cows)
+                |> Random.andThen
+                    (\cowIndex ->
+                        let
+                            cow =
+                                List.Nonempty.get cowIndex state.level.cows
 
-                                    restCows =
-                                        List.filter ((/=) cow) (List.Nonempty.toList cows)
+                            restCows =
+                                List.filter ((/=) cow) (List.Nonempty.toList state.level.cows)
 
-                                    possibleMoves =
-                                        cowPossibleMoves cow restCows
-                                in
-                                Random.List.choose possibleMoves
-                                    |> Random.map Tuple.first
-                                    |> Random.map (Maybe.map (\position -> ( cowIndex, position )))
-                            )
-                        |> Random.generate
-                            (\maybeCowWithTargetPosition ->
-                                case maybeCowWithTargetPosition of
-                                    Just ( cow, targetPosition ) ->
-                                        AnimateCow cow targetPosition
+                            possibleMoves =
+                                cowPossibleMoves cow restCows
+                        in
+                        Random.List.choose possibleMoves
+                            |> Random.map Tuple.first
+                            |> Random.map (Maybe.map (\position -> ( cowIndex, position )))
+                    )
+                |> Random.generate
+                    (\maybeCowWithTargetPosition ->
+                        case maybeCowWithTargetPosition of
+                            Just ( cow, targetPosition ) ->
+                                AnimateCow cow targetPosition
 
-                                    Nothing ->
-                                        Idle
-                            )
+                            Nothing ->
+                                Idle
+                    )
             )
 
         AnimateCow cowIndex targetPosition ->
             ( model
                 |> gameLevelMap
-                    (\(Level lvlNumber cows) ->
-                        cows
-                            |> List.Nonempty.indexedMap
-                                (\index cow ->
-                                    if index == cowIndex then
-                                        Cow.headTo targetPosition cow
+                    (\level ->
+                        { level
+                            | cows =
+                                List.Nonempty.indexedMap
+                                    (\index cow ->
+                                        if index == cowIndex then
+                                            Cow.headTo targetPosition cow
 
-                                    else
-                                        cow
-                                )
-                            |> Level lvlNumber
+                                        else
+                                            cow
+                                    )
+                                    level.cows
+                        }
                     )
                 |> Just
             , Cmd.none
             )
+
+        FindMyCowTimeoutMsg timeoutMsg ->
+            let
+                updatedTimeout =
+                    Timeout.update timeoutMsg state.level.findMyCowTimeout
+            in
+            if Timeout.timeLeft updatedTimeout <= 0 && state.screen == FindMyCow then
+                cowMissed TimesUp model
+
+            else
+                ( Just <|
+                    gameLevelMap
+                        (\level ->
+                            { level | findMyCowTimeout = updatedTimeout }
+                        )
+                        model
+                , Cmd.none
+                )
+
+        MyCowScreenTimeoutMsg timeoutMsg ->
+            let
+                updatedTimeout =
+                    Timeout.update timeoutMsg state.level.myCowScreenTimeout
+            in
+            if Timeout.timeLeft updatedTimeout <= 0 && state.screen == MyCow then
+                ( Just model
+                , Timeout.start ShowLevel state.level.findMyCowTimeout
+                )
+
+            else
+                ( Just <|
+                    gameLevelMap
+                        (\level ->
+                            { level | myCowScreenTimeout = Timeout.update timeoutMsg level.myCowScreenTimeout }
+                        )
+                        model
+                , Cmd.none
+                )
 
         Idle ->
             ( Just model
@@ -318,15 +395,21 @@ randomLevel lvlNumber =
     Random.pair randomCowPositions randomCows
         |> Random.map
             (\( positions, cows ) ->
-                cows
-                    |> List.Nonempty.zip positions
-                    |> List.Nonempty.map
-                        (\( position, cow ) ->
-                            cow
-                                |> Cow.teleportTo position
-                                |> Cow.setScale levelCowSizeRatio
-                        )
-                    |> Level lvlNumber
+                { number = lvlNumber
+                , cows =
+                    cows
+                        |> List.Nonempty.zip positions
+                        |> List.Nonempty.map
+                            (\( position, cow ) ->
+                                cow
+                                    |> Cow.teleportTo position
+                                    |> Cow.setScale levelCowSizeRatio
+                            )
+                , myCowScreenTimeout =
+                    myCowScreenTimeout
+                , findMyCowTimeout =
+                    levelTimeout
+                }
             )
 
 
@@ -343,8 +426,21 @@ startGame tagger =
 
 
 getMyCow : Level -> Cow
-getMyCow (Level _ cows) =
+getMyCow { cows } =
     List.Nonempty.head cows
+
+
+viewReadyButton : Level -> Html Msg
+viewReadyButton { myCowScreenTimeout } =
+    let
+        label =
+            if myCowScreenTimeout == Timeout.infinite then
+                "I'm ready!"
+
+            else
+                "I'm ready! (" ++ Timeout.toString myCowScreenTimeout ++ ")"
+    in
+    Html.button [ onClick Ready ] [ Html.text label ]
 
 
 view : Model -> Html Msg
@@ -372,7 +468,7 @@ view (Game { lives, score, level, screen }) =
                         [ Svg.Attributes.width <| String.fromFloat Cow.cowWidth
                         , Svg.Attributes.height <| String.fromFloat Cow.cowHeight
                         ]
-                , Html.button [ onClick Ready ] [ Html.text "I'm ready!" ]
+                , viewReadyButton level
                 ]
 
         FindMyCow ->
@@ -381,7 +477,7 @@ view (Game { lives, score, level, screen }) =
                 [ viewCows level
                 , Html.div [ style "position" "absolute", style "top" "20px", style "left" "20px" ]
                     [ Html.h2 [] [ Html.text "Which one is your cow?" ]
-                    , viewStatusBar lives score
+                    , viewStatusBar lives score level.findMyCowTimeout
                     ]
                 ]
 
@@ -397,12 +493,21 @@ view (Game { lives, score, level, screen }) =
                     ]
                 ]
 
-        Failure ->
+        Failure reason ->
+            let
+                reasonText =
+                    case reason of
+                        WrongCow ->
+                            "Oh no! It's not your cow! 😔"
+
+                        TimesUp ->
+                            "Time's up! ✋"
+            in
             Html.div
                 []
                 [ viewCows level
                 , viewCloud
-                    [ Html.p [] [ Html.text "Oh no! It's not your cow! 😔" ]
+                    [ Html.p [] [ Html.text reasonText ]
                     , Html.button [ onClick TryAgain ] [ Html.text "Try again" ]
                     ]
                 ]
@@ -415,16 +520,17 @@ view (Game { lives, score, level, screen }) =
                 ]
 
 
-viewStatusBar : Int -> Int -> Html Msg
-viewStatusBar lives score =
+viewStatusBar : Int -> Int -> Timeout -> Html Msg
+viewStatusBar lives score timeout =
     Html.div []
         [ Html.p [] [ Html.text ("Lives: " ++ String.repeat lives "️️❤️") ]
-        , Html.p [] [ Html.text "Score: ", Html.strong [] [ Html.text (String.fromInt score) ] ]
+        , Html.p [] [ Html.text "💎 Score: ", Html.strong [] [ Html.text (String.fromInt score) ] ]
+        , Html.p [] [ Html.text "⏱️ Time: ", Html.strong [] [ Timeout.view timeout ] ]
         ]
 
 
 viewCows : Level -> Html Msg
-viewCows (Level _ cows) =
+viewCows { cows } =
     let
         meadow =
             Svg.image
@@ -455,13 +561,19 @@ viewCows (Level _ cows) =
 
 
 subscription : Model -> Sub Msg
-subscription (Game { screen }) =
-    case screen of
-        FindMyCow ->
-            Time.every 3000 (always DoSomeRandomAction)
+subscription (Game { screen, level }) =
+    Sub.batch
+        [ case screen of
+            FindMyCow ->
+                Time.every 3000 (always DoSomeRandomAction)
 
-        _ ->
-            Sub.none
+            _ ->
+                Sub.none
+        , Timeout.subscription level.findMyCowTimeout
+            |> Sub.map FindMyCowTimeoutMsg
+        , Timeout.subscription level.myCowScreenTimeout
+            |> Sub.map MyCowScreenTimeoutMsg
+        ]
 
 
 viewCloud children =
@@ -486,5 +598,5 @@ viewCloud children =
 
 
 getLevelNumber : Level -> Int
-getLevelNumber (Level lvlNumber _) =
-    lvlNumber
+getLevelNumber { number } =
+    number

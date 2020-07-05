@@ -1,7 +1,8 @@
-module Difficulty exposing (LevelDifficultyParams, Timeout(..), forLevelNumber)
+module Difficulty exposing (LevelDifficultyParams, forLevelNumber)
 
 import Array exposing (Array)
 import List exposing (repeat)
+import Timeout exposing (Timeout)
 
 
 distribution : Array LevelDifficultyParams
@@ -35,8 +36,8 @@ easy =
     , mutatedCowsCount = 0
     , mutantSimilarity = 0
     , patchesPerCow = ( 2, 4 )
-    , levelTimeout = Infinite
-    , myCowScreenTimeout = Infinite
+    , levelTimeout = Timeout.infinite
+    , myCowScreenTimeout = Timeout.infinite
     }
 
 
@@ -46,8 +47,8 @@ medium =
     , mutatedCowsCount = 2
     , mutantSimilarity = 0.3
     , patchesPerCow = ( 4, 5 )
-    , levelTimeout = Infinite
-    , myCowScreenTimeout = Infinite
+    , levelTimeout = Timeout.infinite
+    , myCowScreenTimeout = Timeout.infinite
     }
 
 
@@ -57,8 +58,8 @@ hard =
     , mutatedCowsCount = 3
     , mutantSimilarity = 0.5
     , patchesPerCow = ( 4, 5 )
-    , levelTimeout = timeoutMinutes 3
-    , myCowScreenTimeout = Infinite
+    , levelTimeout = Timeout.fromSeconds 20
+    , myCowScreenTimeout = Timeout.infinite
     }
 
 
@@ -68,8 +69,8 @@ veryHard =
     , mutatedCowsCount = 5
     , mutantSimilarity = 0.5
     , patchesPerCow = ( 4, 8 )
-    , levelTimeout = timeoutMinutes 3
-    , myCowScreenTimeout = timeoutMinutes 2
+    , levelTimeout = Timeout.fromSeconds 15
+    , myCowScreenTimeout = Timeout.fromSeconds 30
     }
 
 
@@ -79,8 +80,8 @@ impossible =
     , mutatedCowsCount = 4
     , mutantSimilarity = 0.7
     , patchesPerCow = ( 4, 8 )
-    , levelTimeout = timeoutMinutes 3
-    , myCowScreenTimeout = timeoutMinutes 1
+    , levelTimeout = Timeout.fromSeconds 10
+    , myCowScreenTimeout = Timeout.fromSeconds 10
     }
 
 
@@ -92,12 +93,3 @@ type alias LevelDifficultyParams =
     , levelTimeout : Timeout
     , myCowScreenTimeout : Timeout
     }
-
-
-type Timeout
-    = Infinite
-    | Secs Int
-
-
-timeoutMinutes mins =
-    Secs (mins * 60)
