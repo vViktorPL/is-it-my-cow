@@ -532,7 +532,14 @@ view (Game { lives, score, level, screen }) =
                 ]
 
         GameOver ->
-            Html.div []
+            Html.div
+                [ style "width" "100%"
+                , style "height" "100%"
+                , style "text-align" "center"
+                , style "background" "black"
+                , style "color" "white"
+                , style "padding-top" "150px"
+                ]
                 [ Html.h2 [] [ Html.text "Game Over" ]
                 , Html.p [] [ Html.text "Your score is: ", Html.strong [] [ Html.text (String.fromInt score) ] ]
                 , Html.button [ onClick ExitGame ] [ Html.text "Go back to the menu" ]
