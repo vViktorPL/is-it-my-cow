@@ -179,7 +179,11 @@ update msg ((Game state) as model) =
                         { level | findMyCowTimeout = timeout }
                     )
                 |> Just
-            , Music.playSong "Ludwigs_Steirische_Gaudi_-_01_-_Rosies_Dance_Polka_ID_22.mp3"
+            , if state.music then
+                Music.playSong "Ludwigs_Steirische_Gaudi_-_01_-_Rosies_Dance_Polka_ID_22.mp3"
+
+              else
+                Cmd.none
             )
 
         CowMsg cow Cow.Clicked ->

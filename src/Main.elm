@@ -11,13 +11,13 @@ import Platform.Sub
 
 type Model
     = Menu Bool
-    | Game Game.Model
+    | Game Bool Game.Model
 
 
 type Msg
     = StartGame
     | ToggleMusic
-    | GameInitialized Game.Model
+    | GameInitialized Bool Game.Model
     | GameMsg Game.Msg
 
 
@@ -30,19 +30,25 @@ main =
         }
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( Menu True, playTitleSong )
+init : Bool -> ( Model, Cmd Msg )
+init music =
+    ( Menu music
+    , if music then
+        playTitleSong
+
+      else
+        Cmd.none
+    )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
         ( StartGame, Menu music ) ->
-            ( model, Game.startGame GameInitialized music )
+            ( model, Game.startGame (GameInitialized music) music )
 
-        ( GameInitialized game, _ ) ->
-            ( Game game, Cmd.none )
+        ( GameInitialized music game, _ ) ->
+            ( Game music game, Cmd.none )
 
         ( ToggleMusic, Menu music ) ->
             ( Menu <| not music
@@ -53,13 +59,13 @@ update msg model =
                 playTitleSong
             )
 
-        ( GameMsg gameMsg, Game game ) ->
+        ( GameMsg gameMsg, Game music game ) ->
             case Game.update gameMsg game of
                 ( Just newGameModel, cmd ) ->
-                    ( Game newGameModel, Cmd.map GameMsg cmd )
+                    ( Game music newGameModel, Cmd.map GameMsg cmd )
 
                 _ ->
-                    init ()
+                    init music
 
         _ ->
             ( model, Cmd.none )
@@ -93,14 +99,14 @@ view model =
                     ]
                 ]
 
-        Game game ->
+        Game _ game ->
             Html.map GameMsg <| Game.view game
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     case model of
-        Game game ->
+        Game _ game ->
             Sub.map GameMsg (Game.subscription game)
 
         _ ->

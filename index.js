@@ -4,7 +4,8 @@ const audio = new Audio();
 audio.loop = true;
 
 const app = Elm.Main.init({
-  node: document.querySelector('main')
+  node: document.querySelector('main'),
+  flags: true
 });
 
 app.ports.playSong.subscribe(function (songName) {
