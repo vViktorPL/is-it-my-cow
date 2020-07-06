@@ -8,12 +8,13 @@ const app = Elm.Main.init({
 });
 
 app.ports.playSong.subscribe(function (songName) {
-  if (audio.src.endsWith(songName)) {
+  if (audio.src.endsWith(songName) && !audio.paused) {
     return;
   }
   audio.src = `music/${songName}`;
   audio.play();
 });
-// app.ports.stop.subscribe(function () {
-//    audio.stop();
-// });
+app.ports.stop.subscribe(function () {
+   audio.pause();
+   audio.currentTime = 0;
+});

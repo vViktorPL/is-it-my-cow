@@ -10,12 +10,13 @@ import Platform.Sub
 
 
 type Model
-    = Menu
+    = Menu Bool
     | Game Game.Model
 
 
 type Msg
     = StartGame
+    | ToggleMusic
     | GameInitialized Game.Model
     | GameMsg Game.Msg
 
@@ -31,17 +32,26 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Menu, playTitleSong )
+    ( Menu True, playTitleSong )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
-        ( StartGame, _ ) ->
-            ( model, Game.startGame GameInitialized )
+        ( StartGame, Menu music ) ->
+            ( model, Game.startGame GameInitialized music )
 
         ( GameInitialized game, _ ) ->
             ( Game game, Cmd.none )
+
+        ( ToggleMusic, Menu music ) ->
+            ( Menu <| not music
+            , if music then
+                Music.stop ()
+
+              else
+                playTitleSong
+            )
 
         ( GameMsg gameMsg, Game game ) ->
             case Game.update gameMsg game of
@@ -51,8 +61,8 @@ update msg model =
                 _ ->
                     init ()
 
-        ( GameMsg _, Menu ) ->
-            ( Menu, Cmd.none )
+        _ ->
+            ( model, Cmd.none )
 
 
 playTitleSong =
@@ -62,13 +72,25 @@ playTitleSong =
 view : Model -> Html Msg
 view model =
     case model of
-        Menu ->
+        Menu music ->
             Html.div [ style "text-align" "center" ]
                 [ Html.h1 [] [ Html.text "Is it my cow?" ]
                 , Html.img [ src "cowhead.svg", class "swing" ] []
                 , Html.br [] []
                 , Html.br [] []
-                , Html.button [ onClick StartGame ] [ Html.text "Start" ]
+                , Html.button [ onClick StartGame ] [ Html.text "▶️ Start" ]
+                , Html.br [] []
+                , Html.br [] []
+                , Html.button [ onClick ToggleMusic ]
+                    [ Html.text <|
+                        "🎶 Music: "
+                            ++ (if music then
+                                    "On"
+
+                                else
+                                    "Off"
+                               )
+                    ]
                 ]
 
         Game game ->

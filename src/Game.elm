@@ -44,6 +44,7 @@ type Model
         , score : Int
         , level : Level
         , screen : GameScreen
+        , music : Bool
         }
 
 
@@ -413,15 +414,21 @@ randomLevel lvlNumber =
             )
 
 
-init : Level -> Model
-init level =
-    Game { lives = 3, score = 0, level = level, screen = MyCow }
+init : Bool -> Level -> Model
+init music level =
+    Game
+        { lives = 3
+        , score = 0
+        , level = level
+        , screen = MyCow
+        , music = music
+        }
 
 
-startGame : (Model -> msg) -> Cmd msg
-startGame tagger =
+startGame : (Model -> msg) -> Bool -> Cmd msg
+startGame tagger music =
     randomLevel 1
-        |> Random.map init
+        |> Random.map (init music)
         |> Random.generate tagger
 
 
