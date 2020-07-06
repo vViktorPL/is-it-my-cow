@@ -547,7 +547,7 @@ view (Game { lives, score, level, screen }) =
                 , style "color" "white"
                 , style "padding-top" "150px"
                 ]
-                [ Html.h2 [] [ Html.text "Game Over" ]
+                [ Html.h2 [] [ Html.text "Game Over \u{1F937}" ]
                 , Html.p [] [ Html.text "Your score is: ", Html.strong [] [ Html.text (String.fromInt score) ] ]
                 , Html.button [ onClick ExitGame ] [ Html.text "Go back to the menu" ]
                 ]
